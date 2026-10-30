@@ -1,0 +1,12 @@
+# Keep secrets, local data and development files out of the build context.
+.env
+data
+.git
+.github
+docs
+**/.venv
+**/__pycache__
+**/.pytest_cache
+backend/tests
+backend/data
+.DS_Store

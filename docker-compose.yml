@@ -1,0 +1,52 @@
+services:
+  app:
+    # The published image. To use your own build instead, run this in a clone of the repository:
+    #   docker build -f backend/Dockerfile -t ghcr.io/ahammerton/passerby:latest .
+    image: ghcr.io/ahammerton/passerby:latest
+    env_file: .env
+    ports:
+      # Set APP_BIND=127.0.0.1 in .env when using Caddy, so only HTTPS is reachable.
+      - "${APP_BIND:-0.0.0.0}:8000:8000"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+  # Optional HTTPS for browser notifications/geolocation on the LAN.
+  # Start with: docker compose --profile https up -d
+  caddy:
+    image: caddy:2.8
+    profiles: ["https"]
+    env_file: .env
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [app]
+    restart: unless-stopped
+
+  # Optional local ADS-B receiver (RTL-SDR dongle plugged into this host).
+  # Start with: docker compose --profile receiver up -d
+  # then set READSB_ENABLED=true and READSB_URL=http://ultrafeeder/data/aircraft.json
+  # Full options: https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder
+  ultrafeeder:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    profiles: ["receiver"]
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      - READSB_DEVICE_TYPE=rtlsdr
+      - READSB_LAT=${HOME_LAT}
+      - READSB_LON=${HOME_LON}
+      - READSB_ALT=${RECEIVER_ALT_M:-50}m
+      - READSB_GAIN=autogain
+      - TZ=${TZ:-Europe/London}
+    ports:
+      - "8080:80"  # tar1090 map at http://<host>:8080
+    volumes:
+      - ultrafeeder_data:/var/globe_history
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  ultrafeeder_data:

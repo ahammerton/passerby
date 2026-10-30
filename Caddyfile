@@ -1,0 +1,8 @@
+# HTTPS on the home network using Caddy's own local certificate authority.
+# Set SITE_ADDRESS in .env to the hostname or IP you browse to.
+# Devices will warn about the certificate until you trust Caddy's root CA —
+# see the README.
+{$SITE_ADDRESS:flights.home.arpa} {
+	tls internal
+	reverse_proxy app:8000
+}

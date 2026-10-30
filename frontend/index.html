@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Passerby</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="tracker">
+  <header id="topbar">
+    <h1>✈ 🚆 Passerby</h1>
+    <div id="sources"></div>
+    <a class="settings-link" href="settings.html" title="Settings">⚙</a>
+  </header>
+
+  <div id="main">
+    <div id="map-column">
+      <div id="map"></div>
+
+      <!-- Everything nearby, in tables under the map. -->
+      <section id="drawer">
+        <div id="drawer-handle" title="Drag to resize"></div>
+        <nav class="tabs" data-tabs="drawer">
+          <button type="button" data-tab="aircraft-tab" class="active">✈ Aircraft <span id="aircraft-count" class="count">0</span></button>
+          <button type="button" data-tab="trains-tab" hidden>🚆 Trains <span id="trains-count" class="count">0</span> <span id="trains-status"></span></button>
+          <button type="button" data-tab="buses-tab" hidden>🚌 Buses <span id="buses-count" class="count">0</span> <span id="buses-status"></span></button>
+          <span class="spacer"></span>
+          <input id="filter" type="search" placeholder="Filter…" aria-label="Filter the table">
+          <button type="button" id="drawer-toggle" class="icon-button" title="Hide or show the table">▾</button>
+        </nav>
+        <div class="drawer-body">
+          <div id="aircraft-tab" class="tab-panel">
+            <table class="grid">
+              <thead><tr><th></th><th>Flight</th><th>Aircraft</th><th>Route</th>
+                <th class="num">Altitude</th><th class="num">Speed</th><th class="num">From home</th></tr></thead>
+              <tbody id="aircraft"><tr class="empty"><td colspan="7">Waiting for aircraft…</td></tr></tbody>
+            </table>
+          </div>
+          <div id="trains-tab" class="tab-panel" hidden>
+            <table class="grid">
+              <thead><tr><th></th><th>Train</th><th>Operator</th><th>Where</th><th>Next report</th><th class="num">Running</th></tr></thead>
+              <tbody id="train-nearby"></tbody>
+            </table>
+            <div class="credit table-credit">Contains information of Network Rail Infrastructure Limited licensed under the
+              <a href="https://publicdatafeeds.networkrail.co.uk/ntrod/" target="_blank" rel="noopener">Network Rail data feeds licence</a> ·
+              stations: <a href="https://github.com/davwheat/uk-railway-stations" target="_blank" rel="noopener">uk-railway-stations</a> (ODbL) ·
+              railway lines © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</div>
+          </div>
+          <div id="buses-tab" class="tab-panel" hidden>
+            <table class="grid">
+              <thead><tr><th></th><th>Route</th><th>Operator</th><th>Next stop</th><th>Running</th><th>Reported</th><th class="num">From home</th></tr></thead>
+              <tbody id="bus-nearby"><tr class="empty"><td colspan="7">Waiting for buses…</td></tr></tbody>
+            </table>
+            <div class="credit table-credit">Bus positions from the
+              <a href="https://www.gov.uk/guidance/find-and-use-bus-open-data" target="_blank" rel="noopener">Bus Open Data Service</a>
+              (Department for Transport), under the Open Government Licence v3.0.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- What needs attention now, departures and weather. -->
+    <aside id="panel">
+      <nav class="tabs" data-tabs="panel">
+        <button type="button" data-tab="now-tab" class="active">Now</button>
+        <button type="button" data-tab="departures-tab" hidden>Departures</button>
+        <button type="button" data-tab="weather-tab">Weather</button>
+        <span class="spacer"></span>
+        <button type="button" id="panel-hide" class="icon-button" title="Hide the side panel">▸</button>
+      </nav>
+
+      <!-- Whatever's selected on the map or in a list. -->
+      <div id="details" hidden></div>
+
+      <!-- Each group folds away by clicking its heading. -->
+      <div id="now-tab" class="tab-panel">
+        <div id="aircraft-group" class="group">
+          <button type="button" class="group-head">✈ Aircraft</button>
+          <section>
+            <h2>Overhead now <span id="overhead-count" class="count">0</span></h2>
+            <ul id="overhead" class="list"><li class="empty">Nothing overhead</li></ul>
+          </section>
+        </div>
+
+        <div id="trains-group" class="group" hidden>
+          <button type="button" class="group-head">🚆 Trains</button>
+          <section>
+            <h2>Passing home <span id="passing-ahead" class="meta"></span></h2>
+            <div id="passing"></div>
+          </section>
+        </div>
+
+        <div id="buses-group" class="group" hidden>
+          <button type="button" class="group-head">🚌 Buses</button>
+          <section>
+            <h2>Near home <span id="near-buses-count" class="count">0</span> <span id="near-buses-range" class="meta"></span></h2>
+            <ul id="near-buses" class="list"><li class="empty">Waiting for buses…</li></ul>
+          </section>
+          <section id="disruptions-section" hidden>
+            <h2>Disruptions <span id="disruptions-count" class="count">0</span></h2>
+            <ul id="disruptions" class="list"><li class="empty">Loading…</li></ul>
+          </section>
+        </div>
+
+        <div id="roads-group" class="group" hidden>
+          <button type="button" class="group-head">🚧 Roads</button>
+          <section>
+            <h2>Closures and incidents <span id="roads-count" class="count">0</span></h2>
+            <ul id="road-closures" class="list"><li class="empty">Loading…</li></ul>
+          </section>
+        </div>
+
+        <div id="today-group" class="group">
+          <button type="button" class="group-head">📊 Today</button>
+          <section>
+            <div id="stats" class="stats"></div>
+          </section>
+        </div>
+      </div>
+
+      <div id="departures-tab" class="tab-panel" hidden>
+        <section><div id="train-boards"></div></section>
+      </div>
+
+      <div id="weather-tab" class="tab-panel" hidden>
+        <section>
+          <h2>Airport weather</h2>
+          <ul id="weather" class="list"><li class="empty">Loading…</li></ul>
+        </section>
+      </div>
+    </aside>
+    <button type="button" id="panel-show" title="Show the side panel" hidden>◂</button>
+  </div>
+
+  <!-- Station view: platform plan (OpenStreetMap) with live trains, and departures. -->
+  <div id="station-view" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="sv-title">
+      <header class="modal-head">
+        <h2 id="sv-title">Station</h2>
+        <span id="sv-updated" class="meta"></span>
+        <button type="button" id="sv-close" class="icon-button" title="Close">✕</button>
+      </header>
+      <div class="sv-body">
+        <div id="sv-map"></div>
+        <div class="sv-side">
+          <div id="sv-platforms"></div>
+          <h3>Departures</h3>
+          <ul id="sv-board" class="list"></ul>
+        </div>
+      </div>
+      <div class="credit sv-credit">Platform layout © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+        contributors · platforms and trains: Network Rail. A train's platform is the one it reported, or the planned one (marked “planned”).</div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

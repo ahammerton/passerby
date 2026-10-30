@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Passerby settings</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+  <main class="settings">
+    <header class="settings-header">
+      <a href="/" class="back">← Map</a>
+      <h1>Settings</h1>
+      <button type="button" id="signout" class="secondary" hidden>Sign out</button>
+    </header>
+
+    <form id="signin" class="signin" hidden>
+      <h2>Sign in</h2>
+      <p class="hint">Settings are protected by the admin password (<code>ADMIN_PASSWORD</code> in <code>.env</code>).</p>
+      <label>Admin password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Sign in</button>
+      <div id="signin-message" role="status"></div>
+    </form>
+
+    <form id="settings" novalidate hidden>
+      <nav class="settings-tabs" role="tablist">
+        <button type="button" role="tab" data-page="general">General</button>
+        <button type="button" role="tab" data-page="location">Location</button>
+        <button type="button" role="tab" data-page="aircraft">✈ Aircraft</button>
+        <button type="button" role="tab" data-page="trains">🚆 Trains</button>
+        <button type="button" role="tab" data-page="buses">🚌 Buses</button>
+        <button type="button" role="tab" data-page="roads">🚧 Roads</button>
+      </nav>
+
+      <div class="settings-page" data-page="general" hidden>
+      <section>
+        <h2>Units</h2>
+        <div class="fields">
+          <label>Distance
+            <select name="distance_unit">
+              <option value="km">Kilometres</option><option value="mi">Miles</option><option value="nm">Nautical miles</option>
+            </select>
+          </label>
+          <label>Altitude
+            <select name="altitude_unit"><option value="ft">Feet</option><option value="m">Metres</option></select>
+          </label>
+          <label>Speed
+            <select name="speed_unit">
+              <option value="kt">Knots</option><option value="mph">mph</option><option value="kmh">km/h</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Aircraft icons</h2>
+        <div class="fields">
+          <label>Colours
+            <select name="aircraft_colours">
+              <option value="airline">Airline colours (others by altitude)</option>
+              <option value="altitude">By altitude</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Backup &amp; restore</h2>
+        <p class="hint">Save everything on this page to a file, for example before moving the app to another
+          machine, and load it back later. Restoring replaces the current settings and applies them straight away.</p>
+        <label class="check"><input type="checkbox" id="backup-secrets"> Include logins and API keys</label>
+        <p id="backup-secrets-hint" class="hint"></p>
+        <button type="button" id="backup" class="secondary">Download backup</button>
+        <button type="button" id="restore" class="secondary">Restore from file…</button>
+        <input type="file" id="restore-file" accept=".json,application/json" hidden>
+      </section>
+
+      <section>
+        <h2>Admin password</h2>
+        <p class="hint">Set <code>ADMIN_PASSWORD</code> in the server's <code>.env</code> so only you can change
+          settings. It can't be set here, so a typo can't lock you out.</p>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="location" hidden>
+      <section>
+        <h2>Home location</h2>
+        <p class="hint">Click the map or drag the marker to set where everything is measured from.</p>
+        <div id="picker"></div>
+        <div class="fields">
+          <label>Name <input name="home_name" maxlength="40" required></label>
+          <label>Latitude <input name="home_lat" type="number" step="0.000001" min="-90" max="90" required></label>
+          <label>Longitude <input name="home_lon" type="number" step="0.000001" min="-180" max="180" required></label>
+        </div>
+        <button type="button" id="locate" class="secondary">Use my location</button>
+        <span id="locate-hint" class="hint"></span>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="aircraft" hidden>
+      <section>
+        <h2>Aircraft</h2>
+        <div class="fields">
+          <label>Display radius <span class="unit" data-unit="distance"></span>
+            <input name="radius_km" type="number" step="any" data-kind="distance" data-min="5" data-max="250"></label>
+          <label>Overhead alert radius <span class="unit" data-unit="distance"></span>
+            <input name="alert_radius_km" type="number" step="any" data-kind="distance" data-min="0.1" data-max="50"></label>
+          <label>Ignore aircraft below <span class="unit" data-unit="altitude"></span>
+            <input name="alert_min_altitude_ft" type="number" step="any" data-kind="altitude" data-min="0" data-max="20000"></label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Your ADS-B receiver</h2>
+        <p class="hint">A receiver on your own network (for example a Flightradar24 or FlightAware feeder) gives the
+          freshest positions, every couple of seconds. Enter its IP address and the app finds its aircraft data.</p>
+        <label class="check"><input type="checkbox" name="readsb_enabled"> Use my receiver</label>
+        <div class="fields">
+          <label>Address (IP, host name or full URL) <input name="readsb_url" placeholder="192.168.1.50"></label>
+          <label>Online feeds (adsb.lol, OpenSky)
+            <select name="online_feeds">
+              <option value="fill">Also show what my receiver can't see</option>
+              <option value="backup">Only if my receiver is down</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" id="receiver-find" class="secondary">Find receiver</button>
+        <span id="receiver-result" class="hint"></span>
+        <p class="hint">Either way, your receiver's data is used for every aircraft it can see.</p>
+      </section>
+
+      <section>
+        <h2>OpenSky Network</h2>
+        <p class="hint">Optional: an API client lets OpenSky be polled every 30 s instead of every 4 min.
+          Create one on your <a href="https://opensky-network.org/my-opensky/account" target="_blank" rel="noopener">OpenSky account page</a>.</p>
+        <div class="fields">
+          <label>Client ID <input name="opensky_client_id" autocomplete="off"></label>
+          <label>Client secret <span class="secret-state" data-secret="opensky_client_secret"></span>
+            <input name="opensky_client_secret" type="password" autocomplete="new-password" data-secret>
+            <span class="check"><input type="checkbox" data-clear="opensky_client_secret"> Clear</span></label>
+        </div>
+        <button type="button" id="opensky-import" class="secondary">Import credentials.json…</button>
+        <input type="file" id="opensky-file" accept=".json,application/json" hidden>
+        <span id="opensky-import-hint" class="hint">The file OpenSky gives you when you create an API client.
+          It's read in your browser; nothing is uploaded until you press Save.</span>
+        <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
+          current one, or type a new one to replace it. New ones are checked before they're saved.</p>
+
+      </section>
+
+      <section>
+        <h2>Aircraft photos</h2>
+        <p class="hint">planespotters.net only serves photos to apps that include a contact email or URL.</p>
+        <div class="fields">
+          <label>Contact (email or URL) <input name="contact" autocomplete="email"></label>
+        </div>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="trains" hidden>
+      <section id="train-settings">
+        <h2>Trains</h2>
+        <p id="trains-off" class="hint" hidden>Trains are off: enter your Network Rail login under
+          “Login” below to turn them on. These settings are saved for when they are.</p>
+        <div class="fields">
+          <label>Train radius <span class="unit" data-unit="distance"></span>
+            <input name="train_radius_km" type="number" step="any" data-kind="distance" data-min="1" data-max="30"></label>
+          <label>Alert before a train passes (seconds)
+            <input name="train_alert_seconds" type="number" step="1" min="10" max="600"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="passing_window"> Show “Passing home” on the Now tab</label>
+        <div class="fields">
+          <label>Trains passing within (minutes)
+            <input name="passing_minutes" type="number" step="1" min="1" max="30"></label>
+        </div>
+        <h3>Departure boards</h3>
+        <p class="hint">Up to 4 stations. None ticked = the station nearest home.</p>
+        <div id="boards" class="checks"></div>
+        <h3>Trains past home</h3>
+        <p class="hint">The two neighbouring stations either side of your home, on the line you want alerts for.</p>
+        <div class="fields">
+          <label>Station A <select name="watch_a"></select></label>
+          <label>Station B <select name="watch_b"></select></label>
+        </div>
+        <h3>Login: Network Rail open data</h3>
+        <p class="hint">For live trains and the timetable.
+          <a href="https://publicdatafeeds.networkrail.co.uk/ntrod/create-account" target="_blank" rel="noopener">Register free</a>.</p>
+        <div class="fields">
+          <label>Email <input name="nrod_username" type="email" autocomplete="username"></label>
+          <label>Password <span class="secret-state" data-secret="nrod_password"></span>
+            <input name="nrod_password" type="password" autocomplete="new-password" data-secret>
+            <span class="check"><input type="checkbox" data-clear="nrod_password"> Clear</span></label>
+        </div>
+
+        <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
+          current one, or type a new one to replace it. New ones are checked before they're saved.</p>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="buses" hidden>
+      <section>
+        <h2>Buses</h2>
+        <p id="buses-off" class="hint" hidden>Buses are off: enter a Bus Open Data Service API key under
+          “API key” below to turn them on. These settings are saved for when they are.</p>
+        <label class="check"><input type="checkbox" name="buses_enabled"> Show live buses (England only)</label>
+        <div class="fields">
+          <label>Bus radius <span class="unit" data-unit="distance"></span>
+            <input name="bus_radius_km" type="number" step="any" data-kind="distance" data-min="1" data-max="30"></label>
+          <label>Show buses from zoom level
+            <select name="bus_min_zoom">
+                <option value="10">10 · county</option>
+                <option value="11">11</option>
+                <option value="12">12 · a town and around it (default)</option>
+                <option value="13">13 · a town</option>
+                <option value="14">14</option>
+                <option value="15">15 · a few streets</option>
+                <option value="16">16</option>
+                <option value="17">17</option>
+                <option value="18">18 · street level</option>
+            </select></label>
+        </div>
+        <p class="hint">Buses only appear when the map is zoomed in this far or closer, so they don't
+          crowd the map at county scale.</p>
+        <label class="check"><input type="checkbox" name="bus_delays"> Show delays and next stops</label>
+        <label class="check"><input type="checkbox" name="bus_disruptions"> Show disruptions (diversions, stop closures, road closures)</label>
+        <div class="fields">
+          <label>Timetable region
+            <select name="bus_region">
+              <option value="auto">Automatic (nearest to home)</option>
+              <option value="south_east">South East</option><option value="london">London</option>
+              <option value="south_west">South West</option><option value="east_anglia">East Anglia</option>
+              <option value="east_midlands">East Midlands</option><option value="west_midlands">West Midlands</option>
+              <option value="north_west">North West</option><option value="north_east">North East</option>
+              <option value="yorkshire">Yorkshire</option>
+            </select></label>
+        </div>
+        <p class="hint">Delays come from comparing each bus with its timetable. The region's timetables
+          (about 300 MB) are downloaded weekly and cut down to the trips near home.</p>
+        <h3>API key: Bus Open Data Service</h3>
+        <p class="hint">For live buses.
+          <a href="https://data.bus-data.dft.gov.uk/" target="_blank" rel="noopener">Register free</a>,
+          then copy the API key from your account settings.</p>
+        <div class="fields">
+          <label>API key <span class="secret-state" data-secret="bods_api_key"></span>
+            <input name="bods_api_key" type="password" autocomplete="off" data-secret>
+            <span class="check"><input type="checkbox" data-clear="bods_api_key"> Clear</span></label>
+        </div>
+
+        <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
+          current one, or type a new one to replace it. New ones are checked before they're saved.</p>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="roads" hidden>
+      <section>
+        <h2>Roads</h2>
+        <p id="roads-off" class="hint" hidden>Road closures are off: enter a National Highways API key under
+          “API key” below to turn them on.</p>
+        <label class="check"><input type="checkbox" name="roads_enabled"> Show road closures and incidents</label>
+        <div class="fields">
+          <label>Road radius <span class="unit" data-unit="distance"></span>
+            <input name="road_radius_km" type="number" step="any" data-kind="distance" data-min="1" data-max="50"></label>
+        </div>
+        <p class="hint">Motorways and major A-roads only (National Highways); council roads aren't covered.</p>
+        <h3>API key: National Highways</h3>
+        <p class="hint">For road closures and incidents.
+          <a href="https://developer.data.nationalhighways.co.uk/" target="_blank" rel="noopener">Register free</a>,
+          subscribe to “Road &amp; Lane Closures”, then copy the subscription key.</p>
+        <div class="fields">
+          <label>API key <span class="secret-state" data-secret="national_highways_api_key"></span>
+            <input name="national_highways_api_key" type="password" autocomplete="off" data-secret>
+            <span class="check"><input type="checkbox" data-clear="national_highways_api_key"> Clear</span></label>
+        </div>
+
+        <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
+          current one, or type a new one to replace it. New ones are checked before they're saved.</p>
+      </section>
+      </div>
+
+      <section class="actions">
+        <div id="message" role="status"></div>
+        <button type="submit" id="save">Save</button>
+        <button type="button" id="reset" class="secondary">Reset to .env defaults</button>
+      </section>
+    </form>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="settings.js"></script>
+</body>
+</html>
