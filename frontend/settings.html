@@ -109,6 +109,13 @@
             <input name="alert_radius_km" type="number" step="any" data-kind="distance" data-min="0.1" data-max="50"></label>
           <label>Ignore aircraft below <span class="unit" data-unit="altitude"></span>
             <input name="alert_min_altitude_ft" type="number" step="any" data-kind="altitude" data-min="0" data-max="20000"></label>
+          <label>Interesting aircraft alerts
+            <select name="interesting_alerts">
+              <option value="all">Emergencies, notable and rare types</option>
+              <option value="emergencies">Emergencies only (squawk 7500/7600/7700)</option>
+              <option value="off">None</option>
+            </select>
+          </label>
         </div>
       </section>
 

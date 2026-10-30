@@ -300,6 +300,23 @@ h3 { margin: 12px 0 4px; font-size: 13px; }
   animation: fade 6s forwards;
 }
 @keyframes fade { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+.toast.interesting { background: #b45309; }
+.toast.emergency { font-weight: 600; }
+
+/* Interesting aircraft: badges, map rings and the side-panel list. */
+.badge-int { font-size: 10px; font-weight: 700; padding: 0 4px; border-radius: 3px; color: #fff; vertical-align: middle; white-space: nowrap; }
+.badge-int.emergency { background: #dc2626; }
+.badge-int.notable, .badge-int.rare { background: #b45309; }
+.plane-tip .tip-interest { color: #b45309; font-weight: 600; }
+.plane.ring-emergency::before, .plane.ring-emergency::after, .plane.ring-interesting::before {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%; pointer-events: none;
+}
+.plane.ring-interesting::before { border: 2px dashed #f59e0b; }
+/* A steady red ring, with a second one pulsing out from it. */
+.plane.ring-emergency::before { border: 3px solid #dc2626; background: rgba(220, 38, 38, 0.18); }
+.plane.ring-emergency::after { border: 3px solid #dc2626; animation: ring-pulse 1.2s ease-out infinite; }
+@keyframes ring-pulse { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.8); opacity: 0; } }
+#interesting li.interest-emergency .callsign { color: var(--alert); }
 
 @media (max-width: 760px) {
   body.tracker { overflow: auto; }

@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     distance_unit: Literal["km", "mi", "nm"] = "km"
     altitude_unit: Literal["ft", "m"] = "ft"
     speed_unit: Literal["kt", "mph", "kmh"] = "kt"
+    # Alerts for interesting aircraft: emergencies, notable and rare types ("all"), emergencies only, or none.
+    interesting_alerts: Literal["all", "emergencies", "off"] = "all"
     # Aircraft icons in their airline's colours (others by altitude), or all by altitude.
     aircraft_colours: Literal["airline", "altitude"] = "airline"
 

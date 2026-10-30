@@ -21,6 +21,7 @@ from . import __version__
 from .aggregator import Aggregator
 from .aircraft_types import classify
 from .airlines import ICAO_CODE, Logos, identify
+from .interesting import RARE_WINDOW_DAYS, Interest
 from .bus_timetable import FILE as BUS_TIMETABLE_FILE
 from .bus_timetable import BusTimetable, area_key, build, download, pick_region, stale
 from . import radar, roads as road_closures
@@ -76,6 +77,7 @@ class AppState:
             photos_enabled=settings.photos_available,
         )
         self.logos = Logos(client, settings.data_dir / "logos")
+        self.interest = Interest(settings.interesting_alerts)
         self.airports: list[Airport] = []
         self.weather: list[dict] = []
         self.source_status: dict[str, dict] = {
@@ -341,8 +343,13 @@ async def broadcast_loop(state: AppState) -> None:
         # After enrichment, which can fill in the type code.
         snapshot = [a.model_copy(update=classify(a) | identify(a.callsign, a.military, a.route and a.route.airline))
                     for a in snapshot]
+        if state.interest.due():
+            since = time.time() - RARE_WINDOW_DAYS * 86400
+            state.interest.set_history(*await asyncio.to_thread(state.store.type_history, since))
+        snapshot = state.interest.annotate(snapshot)
         state.snapshot = snapshot
         alerts = state.aggregator.new_overhead(snapshot)
+        interest_alerts = state.interest.new_alerts(snapshot)
         if snapshot:
             await asyncio.to_thread(state.store.record, snapshot)
         message = {
@@ -352,6 +359,7 @@ async def broadcast_loop(state: AppState) -> None:
             "sources": state.source_status,
         }
         alert_messages = [{"type": "alert", "aircraft": a.model_dump()} for a in alerts]
+        alert_messages += [{"type": "interest_alert", "aircraft": a.model_dump()} for a in interest_alerts]
         if state.trains:
             state.train_state, train_alerts = state.trains.snapshot()
             message["trains"] = state.train_state

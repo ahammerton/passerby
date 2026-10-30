@@ -48,6 +48,7 @@ class SettingsUpdate(BaseModel):
     altitude_unit: Literal["ft", "m"] | None = None
     speed_unit: Literal["kt", "mph", "kmh"] | None = None
     aircraft_colours: Literal["airline", "altitude"] | None = None
+    interesting_alerts: Literal["all", "emergencies", "off"] | None = None
 
     train_radius_km: float | None = Field(None, ge=1, le=30)
     train_watch: str | None = None

@@ -31,6 +31,14 @@ train is about to pass, and keeps a history of what it has seen.
   Between updates, planes keep moving smoothly along their last known heading and speed (following
   their turn, if they're turning), then ease onto each new position.
 - **Overhead alerts**: an in-page toast, plus a browser notification when served over HTTPS
+- **Interesting aircraft**, listed under "Interesting now" and marked on the map:
+  - 🚨 **emergencies:** squawk 7500 (hijack), 7600 (radio failure) or 7700. Pulsing red ring, and an alert straight away.
+  - ✨ **notable types:** Beluga, Dreamlifter, An-124, B-52, AWACS, Spitfire, Lancaster, airships and more. Gold ring and an alert.
+  - ✨ **types rarely seen here:** airliners, turboprops and military types your own history has seen on 3 or
+    fewer airframes in 90 days. Rarity switches on after a week of history.
+  - **military aircraft**, which are listed but don't trigger an alert.
+
+  Choose which ones alert under Settings → Aircraft.
 - **Data sources**: [adsb.lol](https://adsb.lol) (unfiltered, including military), the [OpenSky Network](https://opensky-network.org), and/or your own ADS-B receiver (readsb/tar1090)
 - **Aircraft details**: type, operator, and scheduled origin/destination from [adsbdb](https://www.adsbdb.com), plus a photo from [planespotters.net](https://www.planespotters.net)
 - **UK trains** (optional): every train moving near you, freight included, live from [Network Rail's open data feeds](https://publicdatafeeds.networkrail.co.uk/ntrod/), with destinations, operators, calling points, departure boards, and alerts for trains passing your home
@@ -518,6 +526,7 @@ backend/app/
   sources/        One class per aircraft feed (opensky.py, readsb.py, community.py)
   enrichment.py   adsbdb details and routes, planespotters photos, SQLite cache
   airlines.py     Airline from the callsign, its map colours, and logos
+  interesting.py  Emergencies, notable and rare types, and their alerts
   trains/         Network Rail TRUST and SCHEDULE feeds, CORPUS, stations, OSM railway lines, positions, boards
   store.py        SQLite sighting history
   airports.py     OpenFlights airport data

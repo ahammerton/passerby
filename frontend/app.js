@@ -40,7 +40,11 @@ const fmtVrate = (fpm) => (fpm == null ? "—" : units.altitude === "m" ? `${(fp
 const label = (a) => a.callsign || a.registration || a.icao24.toUpperCase();
 const airportCode = (end) => end.iata || end.icao || "?";
 const routeText = (a) => a.route ? `${airportCode(a.route.origin)} → ${airportCode(a.route.destination)}` : null;
-const milBadge = (a) => a.military ? ' <span class="badge-mil">MIL</span>' : "";
+// Badges after the flight number: military, and why an aircraft is interesting.
+const INTEREST_BADGE = { emergency: (a) => `🚨 ${a.squawk}`, notable: () => "✨ NOTABLE", rare: () => "✨ RARE" };
+const milBadge = (a) => (a.military ? ' <span class="badge-mil">MIL</span>' : "") +
+  (INTEREST_BADGE[a.interest?.level] ? ` <span class="badge-int ${a.interest.level}" title="${esc(a.interest.reason)}">${esc(INTEREST_BADGE[a.interest.level](a))}</span>` : "");
+const interestLevel = (a) => a.interest?.level;
 
 function altitudeColor(a) {
   if (a.on_ground) return "#9ca3af";
@@ -125,8 +129,10 @@ function planeIcon(a) {
   const { size } = PLANE_SHAPES[a.shape] || PLANE_SHAPES.unknown;
   // Balloons and ground vehicles don't point anywhere.
   const rotate = ["balloon", "vehicle"].includes(a.shape) ? 0 : a.track_deg ?? 0;
+  // Emergencies get a pulsing red ring, notable and rare types a gold one.
+  const ring = { emergency: " ring-emergency", notable: " ring-interesting", rare: " ring-interesting" }[interestLevel(a)] || "";
   return L.divIcon({
-    className: "plane",
+    className: `plane${ring}`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     html: shapeSvg(a.shape, planeLook(a), size, rotate),
@@ -145,6 +151,7 @@ function photoHtml(a) {
 function hoverHtml(a) {
   // Flight number, where it's going, and what it is.
   const lines = [`${logoImg(a)}<b>${esc(label(a))}</b>${milBadge(a)}`];
+  if (a.interest && a.interest.level !== "military") lines.push(`<span class="tip-interest">${esc(a.interest.reason)}</span>`);
   if (a.airline_name) lines.push(esc(a.airline_name));
   if (a.route) {
     const { origin: o, destination: d } = a.route;
@@ -165,6 +172,7 @@ function routeHtml(a) {
 
 function popupHtml(a) {
   const rows = [
+    ["Interesting", a.interest && a.interest.level !== "military" ? a.interest.reason : null],
     ["Callsign", a.callsign],
     ["Airline", a.airline_name],
     ["Registration", a.registration],
@@ -328,7 +336,7 @@ requestAnimationFrame(animate);
 
 function iconKey(a) {
   // Only rebuild a plane's icon when what it shows changes.
-  return `${a.shape}|${JSON.stringify(planeLook(a))}|${Math.round((a.track_deg ?? 0) / 3)}`;
+  return `${a.shape}|${JSON.stringify(planeLook(a))}|${interestLevel(a)}|${Math.round((a.track_deg ?? 0) / 3)}`;
 }
 
 function renderAircraft(list) {
@@ -379,6 +387,20 @@ function renderAircraft(list) {
           <span>${fmtDist(a.distance_km)} ${esc(a.direction)}</span></div></li>`).join("")
     : '<li class="empty">Nothing overhead</li>';
 
+  // Side panel: anything interesting in range, most urgent first.
+  const ORDER = { emergency: 0, notable: 1, rare: 2, military: 3 };
+  const interesting = list.filter((a) => a.interest).sort((x, y) =>
+    ORDER[x.interest.level] - ORDER[y.interest.level] || x.distance_km - y.distance_km);
+  document.getElementById("interesting-count").textContent = interesting.length;
+  document.getElementById("interesting").innerHTML = interesting.length
+    ? interesting.slice(0, 10).map((a) => `<li data-icao="${esc(a.icao24)}" class="interest-${a.interest.level}">
+        <div class="row"><span class="callsign">${shapeSvg(a.shape, planeLook(a), 16)} ${logoImg(a, 14)}${esc(label(a))}${milBadge(a)}</span>
+          <span>${a.on_ground ? "Ground" : fmtAlt(a.altitude_ft)}</span></div>
+        <div class="row meta"><span>${esc(a.interest.level === "military" ? (a.aircraft_name || a.kind || "Military") : a.interest.reason)}</span>
+          <span>${fmtDist(a.distance_km)} ${esc(a.direction)}</span></div></li>`).join("")
+      + (interesting.length > 10 ? `<li class="empty">and ${interesting.length - 10} more (filter the table)</li>` : "")
+    : '<li class="empty">Nothing unusual in range</li>';
+
   // Drawer: every aircraft in range, nearest first.
   document.getElementById("aircraft-count").textContent = list.length;
   document.getElementById("aircraft").innerHTML = list.length
@@ -410,9 +432,9 @@ function renderSources(sources) {
   }).join("");
 }
 
-function toast(text) {
+function toast(text, kind = "") {
   const el = document.createElement("div");
-  el.className = "toast";
+  el.className = `toast ${kind}`.trim();
   el.textContent = text;
   document.getElementById("toasts").append(el);
   setTimeout(() => el.remove(), 6000);
@@ -428,6 +450,16 @@ function onAlert(a) {
   }
 }
 
+function onInterestAlert(a) {
+  const where = `${fmtDist(a.distance_km)} ${a.direction}${a.on_ground ? ", on the ground" : `, ${fmtAlt(a.altitude_ft)}`}`;
+  const what = a.aircraft_name || a.type_code || a.kind || "aircraft";
+  const text = `${a.interest.level === "emergency" ? "🚨" : "✨"} ${label(a)}: ${a.interest.reason} (${what}), ${where}`;
+  toast(text, a.interest.level === "emergency" ? "emergency" : "interesting");
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(a.interest.level === "emergency" ? "Aircraft emergency" : "Interesting aircraft", { body: text });
+  }
+}
+
 // Clicking a list entry selects that train or aircraft.
 function focusTrain(e) {
   const row = e.target.closest("[data-train]");
@@ -435,7 +467,7 @@ function focusTrain(e) {
 }
 document.getElementById("train-nearby").addEventListener("click", focusTrain);
 
-for (const id of ["overhead", "aircraft"]) {
+for (const id of ["overhead", "interesting", "aircraft"]) {
   document.getElementById(id).addEventListener("click", (e) => {
     const li = e.target.closest("[data-icao]");
     if (li && latest.has(li.dataset.icao)) select("aircraft", li.dataset.icao);
@@ -1604,6 +1636,8 @@ function connect() {
       }
     } else if (msg.type === "alert") {
       onAlert(msg.aircraft);
+    } else if (msg.type === "interest_alert") {
+      onInterestAlert(msg.aircraft);
     } else if (msg.type === "train_alert") {
       onTrainAlert(msg.train);
     }

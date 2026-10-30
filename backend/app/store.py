@@ -93,6 +93,16 @@ class SightingStore:
             ).fetchone()
         return {k: row[k] or 0 for k in row.keys()}
 
+    def type_history(self, since: float) -> tuple[dict[str, int], int, float]:
+        """(type code -> different airframes seen since `since`, aircraft ever seen, days of history)."""
+        with self._lock:
+            counts = dict(self.db.execute(
+                "SELECT UPPER(type_code), COUNT(DISTINCT icao24) FROM sightings"
+                " WHERE type_code IS NOT NULL AND last_seen >= ? GROUP BY UPPER(type_code)", (since,)).fetchall())
+            aircraft, first, last = self.db.execute(
+                "SELECT COUNT(DISTINCT icao24), MIN(first_seen), MAX(last_seen) FROM sightings").fetchone()
+        return counts, aircraft, ((last - first) / 86400 if first is not None else 0.0)
+
     def close(self) -> None:
         # Waits for a record() still running in a worker thread after its task was cancelled.
         with self._lock:

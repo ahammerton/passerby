@@ -64,7 +64,7 @@ async function loadStations() {
 }
 
 function render() {
-  for (const name of ["home_name", "home_lat", "home_lon", "distance_unit", "altitude_unit", "speed_unit", "aircraft_colours",
+  for (const name of ["home_name", "home_lat", "home_lon", "distance_unit", "altitude_unit", "speed_unit", "aircraft_colours", "interesting_alerts",
     "train_alert_seconds", "nrod_username", "opensky_client_id", "contact", "readsb_url", "online_feeds"]) {
     field(name).value = values[name] ?? "";
   }
@@ -276,6 +276,7 @@ function collect() {
     altitude_unit: field("altitude_unit").value,
     speed_unit: field("speed_unit").value,
     aircraft_colours: field("aircraft_colours").value,
+    interesting_alerts: field("interesting_alerts").value,
     radius_km: round(values.radius_km, 2),
     alert_radius_km: round(values.alert_radius_km, 2),
     alert_min_altitude_ft: round(values.alert_min_altitude_ft, 0),

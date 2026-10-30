@@ -6,6 +6,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Interesting aircraft**, in a new "Interesting now" list and marked on the map:
+  - **Emergencies** (squawk 7500, 7600 or 7700): a pulsing red ring and an immediate alert.
+  - **Notable types** (Beluga, Dreamlifter, An-124, B-52, warbirds, airships and more): a gold ring and an alert.
+  - **Types rarely seen here:** airliners, turboprops and military types seen on 3 or fewer airframes in your last 90 days of history.
+  - **Military aircraft:** listed, but not alerted.
+
+  Alerts can be set to all, emergencies only, or off, under Settings → Aircraft.
+
 ## [0.1.0] - 2026-10-30
 
 The first public release.

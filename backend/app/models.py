@@ -58,6 +58,9 @@ class Aircraft(BaseModel):
     airline_name: str | None = None
     livery: dict[str, str] | None = None
 
+    # {"level": "emergency" | "notable" | "rare" | "military", "reason"}, from interesting.assess().
+    interest: dict[str, str] | None = None
+
     # Map icon and a plain-English description, from aircraft_types.classify().
     shape: str | None = None
     kind: str | None = None
