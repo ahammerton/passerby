@@ -59,9 +59,16 @@ cp .env.example .env      # set HOME_LAT / HOME_LON, and ADMIN_PASSWORD
 docker compose up -d
 ```
 
-Open `http://<server-ip>:8000`. The image is `ghcr.io/ahammerton/passerby`
+Open `http://<server-ip>:8000`. The image is `ghcr.io/ahammerton/passerby`, also on
+Docker Hub as [`cyrune/passerby`](https://hub.docker.com/r/cyrune/passerby)
 (amd64 and arm64): `latest` follows the main branch, and `0.1.0`, `0.1` and `0`
-follow releases. To build it yourself instead, run this in a clone of the
+follow releases.
+
+The app's data (history, caches, settings and logins) is kept in the `passerby_data`
+volume. To keep it in a folder instead, create the folder owned by uid 1000, the app's
+user, before the first start (`mkdir data && sudo chown 1000:1000 data`), and mount it
+as `./data:/data`. A folder that Docker creates itself is owned by root, and the app
+can't write to it. To build it yourself instead, run this in a clone of the
 repository before `docker compose up -d`:
 
 ```sh

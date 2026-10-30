@@ -15,6 +15,13 @@ and versions follow [Semantic Versioning](https://semver.org/).
   - **Military aircraft:** listed, but not alerted.
 
   Alerts can be set to all, emergencies only, or off, under Settings → Aircraft.
+- **Docker Hub:** images are also published as `cyrune/passerby`.
+
+### Changed
+
+- **`docker-compose.yml` keeps the app's data in a named volume** (`passerby_data`) instead of `./data`.
+  A `./data` folder that Docker created itself was owned by root, so the app couldn't write to it.
+  To keep using a folder, create it owned by uid 1000 before the first start: see the README.
 
 ## [0.1.0] - 2026-10-30
 

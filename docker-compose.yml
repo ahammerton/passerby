@@ -8,7 +8,9 @@ services:
       # Set APP_BIND=127.0.0.1 in .env when using Caddy, so only HTTPS is reachable.
       - "${APP_BIND:-0.0.0.0}:8000:8000"
     volumes:
-      - ./data:/data
+      # History, caches, settings and logins. To keep them in a folder here instead, create it
+      # owned by the app's user first (mkdir data && sudo chown 1000:1000 data) and use ./data:/data.
+      - passerby_data:/data
     restart: unless-stopped
 
   # Optional HTTPS for browser notifications/geolocation on the LAN.
@@ -48,5 +50,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  passerby_data:
   caddy_data:
   ultrafeeder_data:
