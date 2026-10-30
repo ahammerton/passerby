@@ -61,8 +61,8 @@ docker compose up -d
 
 Open `http://<server-ip>:8000`. The image is `ghcr.io/ahammerton/passerby`, also on
 Docker Hub as [`cyrune/passerby`](https://hub.docker.com/r/cyrune/passerby)
-(amd64 and arm64): `latest` follows the main branch, and `0.1.0`, `0.1` and `0`
-follow releases.
+(amd64 and arm64): `latest` follows the main branch, and release tags such as
+`0.1.1`, `0.1` and `0` follow releases.
 
 The app's data (history, caches, settings and logins) is kept in the `passerby_data`
 volume. To keep it in a folder instead, create the folder owned by uid 1000, the app's

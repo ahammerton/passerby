@@ -6,6 +6,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-30
+
 ### Added
 
 - **Interesting aircraft**, in a new "Interesting now" list and marked on the map:
@@ -22,6 +24,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - **`docker-compose.yml` keeps the app's data in a named volume** (`passerby_data`) instead of `./data`.
   A `./data` folder that Docker created itself was owned by root, so the app couldn't write to it.
   To keep using a folder, create it owned by uid 1000 before the first start: see the README.
+  **Upgrading with a `./data` folder that already works?** Keep `./data:/data` in your compose file,
+  or your history and settings will seem to disappear (they're still in `./data`).
 
 ## [0.1.0] - 2026-10-30
 
