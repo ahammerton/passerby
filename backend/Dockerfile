@@ -1,5 +1,5 @@
 # Build from the repo root: docker build -f backend/Dockerfile -t ghcr.io/ahammerton/passerby:latest .
-FROM python:3.12-slim
+FROM python:3.15-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
