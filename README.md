@@ -44,6 +44,7 @@ train is about to pass, and keeps a history of what it has seen.
 - **UK trains** (optional): every train moving near you, freight included, live from [Network Rail's open data feeds](https://publicdatafeeds.networkrail.co.uk/ntrod/), with destinations, operators, calling points, departure boards, and alerts for trains passing your home
 - **Buses** (optional, England): live positions from the DfT's [Bus Open Data Service](https://www.gov.uk/guidance/find-and-use-bus-open-data), shown when the map is zoomed in
 - **Roads** (optional, England): closures and incidents on motorways and major A roads from National Highways
+- **Ships** (optional, anywhere with coverage): live AIS positions from [aisstream.io](https://aisstream.io), with names, types, flags, sizes and destinations
 - **Rain radar** from [RainViewer](https://www.rainviewer.com)
 - **Context**: nearby airports (OpenFlights) and METAR weather (aviationweather.gov)
 - **History**: every sighting is logged to SQLite (`data/sightings.db`)
@@ -97,6 +98,7 @@ tab. A tab can be linked to directly, e.g. `/settings.html#buses`.
 - **🚌 Buses:** on/off, radius, zoom level, delays, disruptions, timetable
   region, and the BODS API key.
 - **🚧 Roads:** on/off, radius, and the National Highways API key.
+- **🚢 Ships:** on/off, radius, small boats on/off, and the aisstream.io API key.
 
 If a value is rejected when saving, its tab opens with the reason.
 
@@ -397,6 +399,42 @@ settings page's **🚧 Roads** tab (or `NATIONAL_HIGHWAYS_API_KEY` in `.env`).
 - **Limits:** the API allows 10 calls a minute per key; the app makes about
   one every two minutes.
 
+## Ships
+
+Ships and boats from **AIS**, the radio system ships use to broadcast where they
+are, relayed by [aisstream.io](https://aisstream.io) from volunteers' receivers.
+Coverage is good along most busy coasts and rivers, and patchy elsewhere.
+
+**Setup:** sign in to [aisstream.io](https://aisstream.io/account) with a GitHub
+account (free), create an API key, and enter it on the settings page's
+**🚢 Ships** tab (or `AISSTREAM_API_KEY` in `.env`). It's checked before it's
+saved. Ships stay off until there's a key.
+
+- **Map (🚢 Ships layer):** a hull pointing the way each ship faces, coloured
+  by type: green cargo, red tankers, blue passenger ships, yellow high-speed
+  craft, orange fishing, cyan tugs and pilots, grey military. Moored and
+  anchored ships are dots. Zoomed out, only ships 60 m or longer (and
+  passenger, military and rescue vessels) are drawn.
+- **Ships tab** (under the map): name, type, flag, status, destination and
+  ETA, size and distance, nearest first. Click one for its details and the
+  track of its last half hour; the details link to MarineTraffic and
+  VesselFinder.
+- **Positions every few minutes:** aisstream.io passes on a ship's position
+  about every 2–3 minutes (sometimes less often), so the map moves each ship
+  on by its speed and course in between. A ship is dropped after 30 minutes
+  without a report (an hour if it's moored or at anchor).
+- **Details** (name, type, size, destination) arrive separately, every few
+  minutes. They're kept in `data/ships.db`, so after a restart ships are
+  named straight away.
+- **Small boats:** sailing boats, pleasure craft, and small boats that don't
+  say what they are, are hidden unless you turn them on: around marinas they
+  outnumber everything else.
+- **Settings:** on/off, the ship radius (default 100 km: inland, the nearest
+  coast or big river may be some way off) and small boats.
+- **Limits:** one connection, compressed, covering a box around the ship
+  radius. aisstream.io offers no uptime guarantee and keeps no history; if
+  the connection drops, the app reconnects with a growing wait.
+
 ## Rain radar
 
 The **🌧 Rain radar** map layer shows the last two hours of radar from
@@ -499,6 +537,8 @@ outside.
 | `GET /api/buses/route?id=` | The route a bus is running: road path or stops joined, and every stop |
 | `GET /api/radar` | Rain radar frames (RainViewer tile addresses) |
 | `GET /api/roads` | Road closures and incidents near home (National Highways) |
+| `GET /api/ships` | Ships within the ship radius, nearest first, with feed status |
+| `GET /api/ships/{mmsi}` | One ship, with the track of its last half hour |
 | `GET /api/railways` | Railway track lines around home (OpenStreetMap) |
 | `GET /api/station/{crs}` | One station: platform layout, trains there with platforms, departures |
 | `GET/PUT/DELETE /api/settings` | Read, change (partial update) or reset the settings-page values (admin) |
@@ -509,7 +549,7 @@ outside.
 | `GET /api/stations?lat=&lon=&radius_km=` | Stations near a point |
 | `GET /api/history?limit=100&overhead_only=true` | Logged sightings |
 | `GET /api/stats` | Counts for the last 24h and 7 days |
-| `WS /ws` | `snapshot` messages every 2s (with `trains` and `buses` when enabled), plus `alert` / `train_alert` messages |
+| `WS /ws` | `snapshot` messages every 2s (with `trains`, `buses` and `roads` when enabled, and `ships` every 10s), plus `alert` / `train_alert` messages |
 
 ## Development
 
@@ -534,6 +574,7 @@ backend/app/
   enrichment.py   adsbdb details and routes, planespotters photos, SQLite cache
   airlines.py     Airline from the callsign, its map colours, and logos
   interesting.py  Emergencies, notable and rare types, and their alerts
+  ships/          aisstream.io connection, AIS message decoding, ship tracking and flags
   trains/         Network Rail TRUST and SCHEDULE feeds, CORPUS, stations, OSM railway lines, positions, boards
   store.py        SQLite sighting history
   airports.py     OpenFlights airport data
@@ -547,9 +588,10 @@ in `main.py`.
 
 ## Ideas for next steps
 
-- Highlight interesting aircraft (military, rare types, emergency squawks 7500/7600/7700)
+- Interesting ships: cruise liners, warships, very large ships and distress beacons, with alerts
 - Send alerts to your phone via ntfy or Home Assistant
 - Add a history page with charts built from `/api/history`
+- Ships from your own AIS receiver (AIS-catcher), for coastal homes
 
 ## Third-party data and services
 
@@ -571,6 +613,7 @@ redistribute it. Each has its own terms, and some need you to register:
 | Railway stations | [uk-railway-stations](https://github.com/davwheat/uk-railway-stations) | © David Wheatley, Trainline EU and contributors, ODbL |
 | Buses | [Bus Open Data Service](https://www.gov.uk/guidance/find-and-use-bus-open-data) (DfT) | Open Government Licence |
 | Roads | [National Highways](https://developer.data.nationalhighways.co.uk/) | Open Government Licence |
+| Ships | [aisstream.io](https://aisstream.io) | Free API, with your own key; no published terms of use |
 
 The airline colours are hand-picked approximations for a small map icon, not
 official livery specifications.

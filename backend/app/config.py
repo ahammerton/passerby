@@ -119,6 +119,15 @@ class Settings(BaseSettings):
     # Closures within this distance of home are shown.
     road_radius_km: float = 15.0
 
+    # Ships, from AIS via aisstream.io. Free API key (sign in with GitHub) from
+    # https://aisstream.io/account; ships stay off until it's set.
+    aisstream_api_key: str = ""
+    ships_enabled: bool = True
+    # Ships within this distance of home are shown.
+    ship_radius_km: float = 100.0
+    # Sailing boats, pleasure craft and small boats that don't say what they are.
+    ships_show_leisure: bool = False
+
     # METAR weather for nearby airports from aviationweather.gov.
     weather_interval: int = 600
 
@@ -166,6 +175,10 @@ class Settings(BaseSettings):
     @property
     def roads_available(self) -> bool:
         return self.roads_enabled and bool(self.national_highways_api_key)
+
+    @property
+    def ships_available(self) -> bool:
+        return self.ships_enabled and bool(self.aisstream_api_key)
 
     @property
     def photos_available(self) -> bool:

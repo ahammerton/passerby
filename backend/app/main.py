@@ -28,6 +28,8 @@ from . import radar, roads as road_closures
 from .roads import Roads
 from .bus_disruptions import INTERVAL_S, Disruptions
 from .buses import BusFeedError, BusTracker, check_bods_key
+from .ships import feed as ship_feed
+from .ships.tracker import ShipDetails, ShipTracker
 from .airports import Airport, load_airports, nearest_airports
 from .config import Settings, env_settings, get_settings, read_overrides, reload_settings, write_overrides
 from .credentials import check_nrod, check_opensky
@@ -91,6 +93,8 @@ class AppState:
         self.train_state: dict | None = None
         self.buses: BusTracker | None = None
         self.roads: Roads | None = None
+        self.ships: ShipTracker | None = None
+        self.ship_details: ShipDetails | None = None
 
 
 def build_sources(settings: Settings, client: httpx.AsyncClient) -> list[AircraftSource]:
@@ -335,8 +339,26 @@ async def poll_weather(state: AppState) -> None:
         await asyncio.sleep(s.weather_interval)
 
 
+async def save_ship_details(state: AppState) -> None:
+    """Ship details go to disk once a minute (and on shutdown), not on every message."""
+    try:
+        while True:
+            await asyncio.sleep(60)
+            if changed := state.ships.take_dirty():
+                await asyncio.to_thread(state.ship_details.save, changed)
+    finally:
+        if changed := state.ships.take_dirty():
+            state.ship_details.save(changed)
+
+
+# Ships move slowly and report every few minutes: send them every few broadcasts, not every one.
+SHIPS_EVERY = 5
+
+
 async def broadcast_loop(state: AppState) -> None:
+    tick = 0
     while True:
+        tick += 1
         snapshot = state.aggregator.snapshot()
         if state.settings.enrichment_enabled:
             snapshot = state.enricher.annotate(snapshot)
@@ -368,6 +390,8 @@ async def broadcast_loop(state: AppState) -> None:
             message["buses"] = state.buses.snapshot()
         if state.roads:
             message["roads"] = state.roads.snapshot()
+        if state.ships and tick % SHIPS_EVERY == 1:
+            message["ships"] = state.ships.snapshot()
         for ws in list(state.clients):
             try:
                 await ws.send_json(message)
@@ -428,6 +452,16 @@ class Runtime:
                                 settings.road_radius_km)
             tasks.append(asyncio.create_task(road_closures.run(state.roads)))
             log.info("Road closures within %s km", settings.road_radius_km)
+        if settings.ships_available:
+            state.ship_details = ShipDetails(settings.data_dir / "ships.db")
+            state.ships = ShipTracker(settings.home_lat, settings.home_lon, settings.ship_radius_km,
+                                      settings.ships_show_leisure, await asyncio.to_thread(state.ship_details.load))
+            request = ship_feed.subscription(settings.aisstream_api_key, settings.home_lat, settings.home_lon,
+                                             settings.ship_radius_km)
+            tasks.append(asyncio.create_task(
+                ship_feed.AisStreamFeed(request, state.ships.ingest, state.ships.status).run()))
+            tasks.append(asyncio.create_task(save_ship_details(state)))
+            log.info("Ships within %s km (%d known)", settings.ship_radius_km, len(state.ships.details))
         tasks.append(asyncio.create_task(poll_weather(state)))
         if settings.enrichment_enabled:
             tasks.append(asyncio.create_task(state.enricher.run()))
@@ -446,6 +480,8 @@ class Runtime:
         if self.state:
             self.state.store.close()
             self.state.enrichment_cache.close()
+            if self.state.ship_details:
+                self.state.ship_details.close()
         if self.client:
             await self.client.aclose()
 
@@ -499,6 +535,7 @@ def config():
         "passing_window": {"enabled": s.passing_window, "minutes": s.passing_minutes},
         "buses": {"enabled": tracker().buses is not None, "min_zoom": s.bus_min_zoom},
         "roads": {"enabled": tracker().roads is not None},
+        "ships": {"enabled": tracker().ships is not None},
         "units": {"distance": s.distance_unit, "altitude": s.altitude_unit, "speed": s.speed_unit},
         "aircraft_colours": s.aircraft_colours,
         "version": __version__,
@@ -578,6 +615,8 @@ async def put_user_settings(update: SettingsUpdate):
         if cid and secret and (problem := await check_opensky(client, cid, secret)):
             raise HTTPException(422, problem)
     if changes.get("bods_api_key") and (problem := await check_bods_key(client, changes["bods_api_key"])):
+        raise HTTPException(422, problem)
+    if changes.get("aisstream_api_key") and (problem := await ship_feed.check_key(changes["aisstream_api_key"])):
         raise HTTPException(422, problem)
     if changes.get("national_highways_api_key") and (
             problem := await road_closures.check_key(client, changes["national_highways_api_key"])):
@@ -778,6 +817,26 @@ async def station(crs: str):
             layout, layout_error = None, str(exc)
             _layout_failures[crs] = (time.time(), layout_error)
     return {"station": st.as_dict(), "layout": layout, "layout_error": layout_error, **trains.station_view(crs)}
+
+
+@app.get("/api/ships")
+def ships():
+    state = tracker()
+    if state.ships is None:
+        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY)")
+    return state.ships.snapshot()
+
+
+@app.get("/api/ships/{mmsi}")
+def ship(mmsi: int):
+    """One ship, with its recent track."""
+    state = tracker()
+    if state.ships is None:
+        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY)")
+    found = state.ships.ship(mmsi)
+    if found is None:
+        raise HTTPException(404, "That ship isn't reporting nearby any more")
+    return found | {"trail": state.ships.trail(mmsi)}
 
 
 @app.get("/api/buses")

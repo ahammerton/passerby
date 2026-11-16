@@ -16,7 +16,8 @@ TRAIN_AREA_KEYS = {"home_lat", "home_lon", "train_radius_km"}
 # Changing these changes where aircraft come from.
 RECEIVER_KEYS = {"readsb_enabled", "readsb_url"}
 # Never returned to the browser.
-SECRET_KEYS = {"nrod_password", "opensky_client_secret", "bods_api_key", "national_highways_api_key"}
+SECRET_KEYS = {"nrod_password", "opensky_client_secret", "bods_api_key", "national_highways_api_key",
+               "aisstream_api_key"}
 NROD_KEYS = {"nrod_username", "nrod_password"}
 OPENSKY_KEYS = {"opensky_client_id", "opensky_client_secret"}
 
@@ -65,6 +66,10 @@ class SettingsUpdate(BaseModel):
 
     roads_enabled: bool | None = None
     road_radius_km: float | None = Field(None, ge=1, le=50)
+
+    ships_enabled: bool | None = None
+    ship_radius_km: float | None = Field(None, ge=5, le=200)
+    ships_show_leisure: bool | None = None
     bus_region: Literal["auto", "south_east", "london", "south_west", "east_anglia", "east_midlands",
                         "west_midlands", "north_west", "north_east", "yorkshire"] | None = None
 
@@ -75,11 +80,12 @@ class SettingsUpdate(BaseModel):
     opensky_client_secret: str | None = Field(None, max_length=200)
     bods_api_key: str | None = Field(None, max_length=200)
     national_highways_api_key: str | None = Field(None, max_length=200)
+    aisstream_api_key: str | None = Field(None, max_length=200)
     # planespotters.net needs a contact (email or URL) in requests before it serves photos.
     contact: str | None = Field(None, max_length=200)
 
     @field_validator("nrod_username", "nrod_password", "opensky_client_id", "opensky_client_secret", "contact",
-                     "readsb_url", "bods_api_key", "national_highways_api_key")
+                     "readsb_url", "bods_api_key", "national_highways_api_key", "aisstream_api_key")
     @classmethod
     def _strip(cls, v: str | None) -> str | None:
         return v.strip() if v is not None else v
@@ -137,5 +143,6 @@ def settings_payload(current: Settings, defaults: Settings, overridden: dict, tr
             "opensky_client_secret": bool(current.opensky_client_secret),
             "bods_api_key": bool(current.bods_api_key),
             "national_highways_api_key": bool(current.national_highways_api_key),
+            "aisstream_api_key": bool(current.aisstream_api_key),
         },
     }

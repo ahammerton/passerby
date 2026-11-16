@@ -6,6 +6,22 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Ships**, from AIS via aisstream.io (optional; free API key). A 🚢 Ships map layer with icons by type
+  that point the way each ship faces, a Ships tab with flag, status, destination and size, and details
+  with the ship's recent track. Ships are moved on between reports, small boats are hidden unless turned
+  on, and ship details are kept in `data/ships.db`.
+
+### Changed
+
+- The **Weather tab** is readable now: temperature, wind, visibility, cloud, rain or fog, pressure and when it was observed,
+  in your chosen units, with the airport's name. A **Show raw METAR** switch shows the original reports too.
+
+### Fixed
+
+- Airport weather stopped loading: aviationweather.gov now rejects coordinates with long decimals.
+
 ## [0.1.2] - 2026-11-16
 
 ### Added

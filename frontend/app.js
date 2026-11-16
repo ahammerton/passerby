@@ -543,7 +543,7 @@ if (recall("panel-hidden")) setPanelHidden(true);
 // Picked on the map, in the Now tab or in the tables; the map centres on it.
 const selection = { kind: null, id: null };
 const isSelected = (kind, id) => selection.kind === kind && selection.id === id;
-const SELECT_ZOOM = { aircraft: 10, train: 13 };
+const SELECT_ZOOM = { aircraft: 10, train: 13, ship: 11 };
 
 function selectedItem() {
   const { kind, id } = selection;
@@ -552,12 +552,14 @@ function selectedItem() {
   if (kind === "bus") return latestBuses.find((b) => b.id === id);
   if (kind === "disruption") return latestDisruptions?.find((d) => d.id === id);
   if (kind === "road") return latestRoads.find((r) => r.id === id);
+  if (kind === "ship") return latestShips.find((s) => s.mmsi === id);
   return null;
 }
 
 function select(kind, id) {
   const again = isSelected(kind, id);
   if (!again && selection.kind === "bus") hideRoute(selection.id);
+  if (!again && selection.kind === "ship") hideShipTrail();
   if (!again) disruptionLayer.clearLayers();
   Object.assign(selection, { kind, id });
   const item = selectedItem();
@@ -574,6 +576,10 @@ function select(kind, id) {
     drawRoads();
   } else if (kind === "train") {
     map.setView(trainMarkers.get(id)?.getLatLng() || [item.lat, item.lon], Math.max(map.getZoom(), SELECT_ZOOM.train));
+  } else if (kind === "ship") {
+    if (!map.hasLayer(shipLayer)) shipLayer.addTo(map);
+    map.setView(shipPosition(item), Math.max(map.getZoom(), SELECT_ZOOM.ship));
+    if (!again) loadShipTrail(id);
   } else {
     // Zoomed in far enough for buses to be drawn.
     if (!map.hasLayer(busLayer)) busLayer.addTo(map);
@@ -587,6 +593,7 @@ function select(kind, id) {
 
 function deselect() {
   if (selection.kind === "bus") hideRoute(selection.id);
+  if (selection.kind === "ship") hideShipTrail();
   disruptionLayer.clearLayers();
   const wasRoad = selection.kind === "road";
   Object.assign(selection, { kind: null, id: null });
@@ -595,7 +602,7 @@ function deselect() {
 }
 
 const DETAILS_TITLE = { aircraft: "✈ Selected aircraft", train: "🚆 Selected train", bus: "🚌 Selected bus",
-  disruption: "⚠ Bus disruption", road: "🚧 Road closure" };
+  disruption: "⚠ Bus disruption", road: "🚧 Road closure", ship: "🚢 Selected ship" };
 
 // Re-rendered on every update while something is selected.
 function renderDetails() {
@@ -611,7 +618,8 @@ function renderDetails() {
     : selection.kind === "aircraft" ? popupHtml(item)
     : selection.kind === "train" ? trainPopup(item)
     : selection.kind === "disruption" ? disruptionHtml(item)
-    : selection.kind === "road" ? roadHtml(item) : busPopup(item);
+    : selection.kind === "road" ? roadHtml(item)
+    : selection.kind === "ship" ? shipPopup(item) : busPopup(item);
   el.hidden = false;
   el.innerHTML = `<button type="button" class="group-head details-head" title="Close">${DETAILS_TITLE[selection.kind]}</button>
     <div class="details-body">${body}</div>`;
@@ -626,7 +634,7 @@ document.getElementById("details").addEventListener("click", (e) => {
 // Controls (tabs, buttons, links, the filter...) and the details card itself don't count.
 map.on("click", () => selection.kind && deselect());
 document.addEventListener("click", (e) => {
-  if (!selection.kind || e.target.closest(`#map, #details, #station-view, [data-icao], [data-train], [data-bus], [data-disruption], [data-road],
+  if (!selection.kind || e.target.closest(`#map, #details, #station-view, [data-icao], [data-train], [data-bus], [data-disruption], [data-road], [data-ship],
       button, a, input, select, summary, label, #drawer-handle`)) return;
   deselect();
 });
@@ -639,7 +647,8 @@ let selectedEl = null;
 function markSelected() {
   selectedEl?.classList.remove("selected");
   const m = selection.kind === "aircraft" ? markers.get(selection.id)
-    : selection.kind === "train" ? trainMarkers.get(selection.id) : null;
+    : selection.kind === "train" ? trainMarkers.get(selection.id)
+    : selection.kind === "ship" ? shipMarkers.get(selection.id) : null;
   selectedEl = m?.getElement() || null;
   selectedEl?.classList.add("selected");
   m?.setZIndexOffset(2000);
@@ -674,7 +683,7 @@ if (recall("drawer-collapsed")) setDrawerCollapsed(true);
 const filterInput = document.getElementById("filter");
 function applyFilter() {
   const q = filterInput.value.trim().toLowerCase();
-  for (const body of ["aircraft", "train-nearby", "bus-nearby"]) {
+  for (const body of ["aircraft", "train-nearby", "bus-nearby", "ship-nearby"]) {
     for (const row of document.getElementById(body).rows) {
       if (!row.classList.contains("empty")) row.hidden = q !== "" && !row.textContent.toLowerCase().includes(q);
     }
@@ -696,19 +705,83 @@ async function getJSON(path) {
   return resp.json();
 }
 
+// ---------- weather ----------
+
+const CATEGORY_HELP = {
+  VFR: "Good visibility and high cloud",
+  MVFR: "Marginal: some low cloud or haze",
+  IFR: "Poor: low cloud, fog or rain",
+  LIFR: "Very poor: very low cloud or thick fog",
+};
+let showRawMetar = recall("showRawMetar") === "1";
+
+function windText(w) {
+  if (w.wind_kt == null) return null;
+  if (w.wind_kt === 0) return "Calm";
+  const from = w.wind_dir === "VRB" ? "variable" : w.wind_dir == null ? "" : COMPASS[Math.round(w.wind_dir / 45) % 8];
+  const gust = w.gust_kt ? `, gusting ${fmtSpeed(w.gust_kt)}` : "";
+  return `Wind ${from} ${fmtSpeed(w.wind_kt)}${gust}`.replace(/\s+/g, " ");
+}
+
+function visibilityText(w) {
+  if (w.visibility_km == null) return null;
+  const digits = w.visibility_km < 5 ? 1 : 0;
+  return `Visibility ${fmtDist(w.visibility_km, digits)}${w.visibility_plus ? " or more" : ""}`;
+}
+
+function skyText(w) {
+  if (w.clouds?.length) {
+    return w.clouds.map((c, i) => `${i ? c.cover.toLowerCase() : c.cover}${c.base_ft != null ? ` at ${fmtAlt(c.base_ft)}` : ""}`).join(", ");
+  }
+  return w.sky;
+}
+
+function observedText(observed) {
+  if (!observed) return null;
+  const mins = Math.max(0, Math.round((serverNow() - observed) / 60));
+  return mins < 1 ? "just now" : mins < 120 ? `${mins} min ago` : `${Math.round(mins / 60)} h ago`;
+}
+
+function weatherItem(w) {
+  const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const temp = w.temp_c == null ? null : `${Math.round(w.temp_c)} °C`;
+  const lines = [
+    [temp, windText(w), visibilityText(w)],
+    [w.weather?.length ? capital(w.weather.join(", ")) : null, skyText(w)],
+    [w.pressure_hpa != null ? `${Math.round(w.pressure_hpa)} hPa` : null,
+     w.dewpoint_c != null ? `dew point ${Math.round(w.dewpoint_c)} °C` : null,
+     observedText(w.observed) ? `observed ${observedText(w.observed)}` : null],
+  ].map((parts) => parts.filter(Boolean).map(esc).join(" · ")).filter(Boolean);
+  const cat = w.flight_category
+    ? ` <span class="cat cat-${esc(w.flight_category)}" title="${esc(CATEGORY_HELP[w.flight_category] || "")}">${esc(w.flight_category)}</span>`
+    : "";
+  return `<li>
+    <div class="row"><span><span class="title">${esc(w.name || w.icao)}</span>
+      <span class="meta">${w.name ? esc(w.icao) : ""}</span>${cat}</span>
+      <span class="meta">${fmtDist(w.distance_km, 0)}</span></div>
+    ${lines.map((l, i) => `<div class="${i ? "meta" : "wx-main"}">${l}</div>`).join("")}
+    <div class="metar" ${showRawMetar ? "" : "hidden"}>${esc(w.raw)}</div></li>`;
+}
+
 async function loadWeather() {
   try {
     const metars = await getJSON("/api/weather");
     document.getElementById("weather").innerHTML = metars.length
-      ? metars.map((w) => `<li>
-          <div class="row"><span class="callsign">${esc(w.icao)}
-            ${w.flight_category ? `<span class="cat cat-${esc(w.flight_category)}">${esc(w.flight_category)}</span>` : ""}</span>
-            <span class="meta">${fmtDist(w.distance_km, 0)}</span></div>
-          <div class="metar">${esc(w.raw)}</div></li>`).join("")
+      ? metars.map(weatherItem).join("")
       : '<li class="empty">No METAR stations nearby</li>';
   } catch (e) {
     console.warn(e);
   }
+}
+
+{
+  const toggle = document.getElementById("show-raw-metar");
+  toggle.checked = showRawMetar;
+  toggle.addEventListener("change", () => {
+    showRawMetar = toggle.checked;
+    remember("showRawMetar", showRawMetar ? "1" : "0");
+    for (const el of document.querySelectorAll("#weather .metar")) el.hidden = !showRawMetar;
+  });
 }
 
 async function loadStats() {
@@ -1632,6 +1705,216 @@ radarLayer.on("remove", () => {
   radar.control = null;
 });
 
+// ---------- ships (AIS via aisstream.io) ----------
+
+const shipLayer = L.layerGroup();
+const shipTrailLayer = L.layerGroup().addTo(map);
+const shipMarkers = new Map(); // mmsi -> marker
+let latestShips = [];
+let shipTrail = null; // { mmsi, points, asked }
+
+const SHIP_COLOURS = {
+  cargo: "#16a34a", tanker: "#dc2626", passenger: "#2563eb", highspeed: "#eab308", fishing: "#f97316",
+  tug: "#06b6d4", special: "#14b8a6", military: "#64748b", sar: "#f43f5e", sailing: "#a855f7",
+  pleasure: "#a855f7", small: "#c084fc", beacon: "#ef4444", other: "#9ca3af", unknown: "#9ca3af",
+};
+const SHIP_CATEGORY = {
+  cargo: "Cargo ship", tanker: "Tanker", passenger: "Passenger ship", highspeed: "High-speed craft",
+  fishing: "Fishing vessel", tug: "Tug or pilot", special: "Special craft", military: "Military or law enforcement",
+  sar: "Search and rescue", sailing: "Sailing boat", pleasure: "Pleasure craft", small: "Small boat",
+  beacon: "Emergency beacon", other: "Other vessel", unknown: "Type not reported yet",
+};
+// Zoomed out, only ships this long (or of these kinds) are drawn, so harbours don't turn into blobs.
+const SHIP_FAR_ZOOM = 10;
+const SHIP_FAR_MIN_M = 60;
+const SHIP_ALWAYS = new Set(["passenger", "military", "sar", "beacon"]);
+const SHIP_PREDICT_MAX_S = 15 * 60; // stop moving a ship on after this long without a report
+const MS_TO_KT = 1.943844;
+
+const shipName = (s) => s.name || `MMSI ${s.mmsi}`;
+const shipType = (s) => s.type || SHIP_CATEGORY[s.category] || "Vessel";
+const flagEmoji = (code) => (/^[A-Z]{2}$/.test(code || "")
+  ? String.fromCodePoint(...[...code].map((c) => 127397 + c.charCodeAt(0))) : "");
+let regionNames = null;
+try { regionNames = new Intl.DisplayNames(["en"], { type: "region" }); } catch {}
+const flagName = (code) => { try { return (code && regionNames?.of(code)) || code || ""; } catch { return code || ""; } };
+const shipMoving = (s) => !s.still && s.speed_kt != null && s.speed_kt >= 0.5;
+const shipBearing = (s) => s.heading ?? s.course;
+const shipSize = (s) => (s.length_m >= 200 ? 24 : s.length_m >= 80 ? 20 : 16);
+const shipDate = (t) => (t ? new Date(t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null);
+
+function shipIcon(s) {
+  const colour = SHIP_COLOURS[s.category] || SHIP_COLOURS.unknown;
+  const size = shipSize(s);
+  const bearing = shipBearing(s);
+  // Moored, anchored or drifting with no known heading: a dot. Otherwise a hull pointing the way it's facing.
+  const html = !shipMoving(s) && bearing == null || s.category === "beacon"
+    ? `<svg width="${size * 0.6}" height="${size * 0.6}" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${colour}" stroke="#000" stroke-width=".8"/></svg>`
+    : `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform: rotate(${Math.round(bearing ?? 0)}deg)">
+        <path d="M12 1.5 L17 8 L17 21.5 Q12 23 7 21.5 L7 8 Z" fill="${colour}" stroke="#000" stroke-width="1"/></svg>`;
+  const box = !shipMoving(s) && bearing == null || s.category === "beacon" ? size * 0.6 : size;
+  return L.divIcon({ className: "ship", iconSize: [box, box], iconAnchor: [box / 2, box / 2], html });
+}
+
+// Where the ship is probably now: its last report moved on by its speed and course.
+function shipPosition(s) {
+  if (!shipMoving(s) || s.course == null) return [s.lat, s.lon];
+  const elapsed = Math.min(Math.max(0, serverNow() - s.reported), SHIP_PREDICT_MAX_S);
+  const km = s.speed_kt * 1.852 * elapsed / 3600;
+  const rad = (s.course * Math.PI) / 180;
+  const dLat = (km * Math.cos(rad)) / 111.32;
+  const dLon = (km * Math.sin(rad)) / (111.32 * Math.cos((s.lat * Math.PI) / 180));
+  return [s.lat + dLat, s.lon + dLon];
+}
+
+function shipDrawnAt(s, zoom) {
+  return zoom >= SHIP_FAR_ZOOM || SHIP_ALWAYS.has(s.category) || (s.length_m || 0) >= SHIP_FAR_MIN_M ||
+    isSelected("ship", s.mmsi);
+}
+
+function drawShips() {
+  if (!map.hasLayer(shipLayer)) return;
+  const zoom = map.getZoom();
+  const view = map.getBounds().pad(0.2);
+  const seen = new Set();
+  for (const s of latestShips) {
+    if (!shipDrawnAt(s, zoom)) continue;
+    const at = shipPosition(s);
+    if (!view.contains(at)) continue;
+    seen.add(s.mmsi);
+    const key = `${s.category}|${shipSize(s)}|${shipMoving(s)}|${Math.round((shipBearing(s) ?? -5) / 5)}`;
+    let m = shipMarkers.get(s.mmsi);
+    if (!m) {
+      m = L.marker(at, { icon: shipIcon(s), zIndexOffset: 300 }).addTo(shipLayer);
+      m.on("click", () => select("ship", m.ship.mmsi));
+      m.bindTooltip("", { direction: "top", offset: [0, -8] });
+      m.iconKey = key;
+      shipMarkers.set(s.mmsi, m);
+    } else {
+      if (m.iconKey !== key) {
+        m.iconKey = key;
+        m.setIcon(shipIcon(s));
+      }
+      m.setLatLng(at);
+    }
+    m.ship = s;
+    m.setTooltipContent(`${esc(shipName(s))} · ${esc(shipType(s))}${s.speed_kt != null ? ` · ${fmtSpeed(s.speed_kt)}` : ""}`);
+  }
+  for (const [mmsi, m] of shipMarkers) {
+    if (!seen.has(mmsi)) {
+      m.remove();
+      shipMarkers.delete(mmsi);
+    }
+  }
+  markSelected();
+}
+
+function shipStatus(s) {
+  if (s.status && s.status !== "Under way") return s.status;
+  if (s.speed_kt == null) return s.status || "—";
+  return s.speed_kt < 0.5 ? "Stopped" : `${fmtSpeed(s.speed_kt)} ${heading(s.course)}`;
+}
+
+function shipSizeText(s) {
+  if (!s.length_m) return null;
+  return `${Math.round(s.length_m)} m${s.beam_m ? ` × ${Math.round(s.beam_m)} m` : ""}`;
+}
+
+function renderShipTable(snapshot) {
+  const st = snapshot.status || {};
+  document.getElementById("ships-count").textContent = latestShips.length;
+  const title = st.ok === false ? st.error || "Not connected"
+    : `Live from aisstream.io: ${st.shown ?? 0} shown of ${st.tracked ?? 0} vessels in range`;
+  document.getElementById("ships-status").innerHTML =
+    `<span class="dot ${st.ok ? "ok" : st.ok === false ? "err" : ""}" title="${esc(title)}"></span>`;
+  document.getElementById("ship-nearby").innerHTML = latestShips.length
+    ? latestShips.slice(0, 300).map((s) => `<tr data-ship="${s.mmsi}">
+        <td class="icon"><span class="ship-dot" style="background: ${SHIP_COLOURS[s.category] || SHIP_COLOURS.unknown}"></span></td>
+        <td><b>${esc(shipName(s))}</b><small>${esc(shipType(s))}</small></td>
+        <td>${flagEmoji(s.flag)} ${esc(flagName(s.flag) || "—")}</td>
+        <td>${esc(shipStatus(s))}</td>
+        <td>${esc(s.destination || "—")}${s.eta ? `<small>due ${esc(shipDate(s.eta))}</small>` : ""}</td>
+        <td>${esc(shipSizeText(s) || "—")}</td>
+        <td class="num">${fmtDist(s.distance_km)} ${esc(s.direction || "")}</td></tr>`).join("")
+    : `<tr class="empty"><td colspan="7">${st.ok === false ? `No ship data: ${esc(st.error || "error")}` : "Waiting for ships… (positions arrive every few minutes)"}</td></tr>`;
+  applyFilter();
+}
+
+function shipPopup(s) {
+  const flagText = s.flag ? `${flagEmoji(s.flag)} ${flagName(s.flag)}` : null;
+  const ago = observedText(s.reported);
+  const rows = [
+    ["Type", shipType(s)], ["Flag", flagText], ["Status", shipStatus(s)],
+    ["Heading", s.heading != null ? `${s.heading}°` : null],
+    ["Destination", s.destination], ["Due", shipDate(s.eta)],
+    ["Size", shipSizeText(s)], ["Draught", s.draught_m ? `${s.draught_m} m` : null],
+    ["MMSI", String(s.mmsi)], ["IMO", s.imo ? String(s.imo) : null], ["Call sign", s.callsign],
+    ["From home", `${fmtDist(s.distance_km)} ${s.direction || ""}`],
+    ["Reported", ago && `${ago}${s.ais_class === "B" ? " (small-boat transponder)" : ""}`],
+  ].filter(([, v]) => v);
+  const trail = shipTrail?.mmsi === s.mmsi && shipTrail.points.length > 1
+    ? '<div class="meta">Its last half hour is drawn on the map.</div>' : "";
+  return `<div class="title"><b>🚢 ${esc(shipName(s))}</b></div>
+    <table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join("")}</table>
+    ${trail}
+    <div class="meta"><a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic</a> ·
+      <a href="https://www.vesselfinder.com/vessels/details/${s.mmsi}" target="_blank" rel="noopener">VesselFinder</a></div>
+    <div class="credit">AIS data from aisstream.io · positions every few minutes, moved on between reports</div>`;
+}
+
+async function loadShipTrail(mmsi) {
+  shipTrail = { mmsi, points: shipTrail?.mmsi === mmsi ? shipTrail.points : [], asked: Date.now() };
+  try {
+    const data = await getJSON(`/api/ships/${mmsi}`);
+    if (shipTrail?.mmsi !== mmsi) return;
+    shipTrail.points = data.trail || [];
+  } catch {
+    return;
+  }
+  drawShipTrail();
+  if (isSelected("ship", mmsi)) renderDetails();
+}
+
+function drawShipTrail() {
+  shipTrailLayer.clearLayers();
+  if (!shipTrail || !isSelected("ship", shipTrail.mmsi)) return;
+  const s = selectedItem();
+  const points = [...shipTrail.points, ...(s ? [shipPosition(s)] : [])];
+  if (points.length > 1) {
+    L.polyline(points, { color: SHIP_COLOURS[s?.category] || "#2563eb", weight: 3, opacity: 0.8, dashArray: "2 6",
+      interactive: false }).addTo(shipTrailLayer);
+  }
+}
+
+function hideShipTrail() {
+  shipTrail = null;
+  shipTrailLayer.clearLayers();
+}
+
+function renderShips(snapshot) {
+  latestShips = snapshot.ships || [];
+  renderShipTable(snapshot);
+  if (selection.kind === "ship") {
+    const s = selectedItem();
+    if (s && Date.now() - (shipTrail?.asked || 0) > 60000) loadShipTrail(s.mmsi);
+    renderDetails();
+  }
+  drawShips();
+  drawShipTrail();
+}
+
+document.getElementById("ship-nearby").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-ship]");
+  if (row) select("ship", Number(row.dataset.ship));
+});
+map.on("zoomend moveend", drawShips);
+map.on("overlayadd", (e) => { if (e.layer === shipLayer) drawShips(); });
+// Move ships on between reports (they're slow: every few seconds is plenty).
+setInterval(() => {
+  drawShips();
+  if (selection.kind === "ship") drawShipTrail();
+}, 5000);
+
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -1644,6 +1927,7 @@ function connect() {
       renderSources(msg.sources);
       if (msg.buses) renderBuses(msg.buses);
       if (msg.roads) renderRoads(msg.roads);
+      if (msg.ships) renderShips(msg.ships);
       if (msg.trains) {
         renderTrains(msg.trains);
         if (!connect.tabsRestored) {
@@ -1683,7 +1967,7 @@ async function loadRailways() {
   for (const line of lines) L.polyline(line, dashes).addTo(railLayer);
 }
 
-function addLayerControl(withTrains, withBuses, withRoads) {
+function addLayerControl(withTrains, withBuses, withRoads, withShips) {
   const overlays = { "✈ Aircraft": aircraftLayer };
   if (withTrains) {
     overlays["🚆 Trains"] = trainLayer;
@@ -1696,6 +1980,10 @@ function addLayerControl(withTrains, withBuses, withRoads) {
   if (withRoads) {
     roadLayer.addTo(map);
     overlays["🚧 Roads"] = roadLayer;
+  }
+  if (withShips) {
+    shipLayer.addTo(map);
+    overlays["🚢 Ships"] = shipLayer;
   }
   overlays["Airports"] = airportLayer;
   overlays[RADAR_LAYER_NAME] = radarLayer;
@@ -1740,7 +2028,12 @@ async function init() {
     document.getElementById("buses-group").hidden = false;
   }
   if (cfg.roads?.enabled) document.getElementById("roads-group").hidden = false;
-  addLayerControl(cfg.trains, cfg.buses?.enabled, cfg.roads?.enabled);
+  if (cfg.ships?.enabled) {
+    document.querySelector('[data-tab="ships-tab"]').hidden = false;
+    // The live feed sends ships every few seconds; don't wait for it.
+    getJSON("/api/ships").then(renderShips).catch(console.warn);
+  }
+  addLayerControl(cfg.trains, cfg.buses?.enabled, cfg.roads?.enabled, cfg.ships?.enabled);
   renderBuses();
   if (cfg.trains && cfg.passing_window?.enabled) {
     passing = { minutes: cfg.passing_window.minutes };

@@ -258,6 +258,16 @@ h3 { margin: 12px 0 4px; font-size: 13px; }
 #passing a { color: var(--accent); }
 .list li.cancelled .callsign { text-decoration: line-through; opacity: 0.6; }
 
+/* Weather tab: a readable summary per airport, the raw METAR on request. */
+#weather li { cursor: default; }
+#weather li:hover { background: none; }
+#weather li + li { border-top: 1px solid var(--border); border-radius: 0; }
+#weather .title { font-weight: 600; margin-right: 4px; }
+#weather .wx-main { margin: 2px 0 1px; }
+#weather .metar { margin-top: 4px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.section-head .toggle { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.section-head .toggle input { accent-color: var(--accent); margin: 0; }
 .metar { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); word-break: break-word; }
 .cat { font-size: 11px; font-weight: 600; padding: 0 5px; border-radius: 4px; color: #fff; }
 .cat-VFR { background: #16a34a; }
@@ -289,6 +299,9 @@ h3 { margin: 12px 0 4px; font-size: 13px; }
 /* ...and a glow on the map. */
 .plane svg.overhead { filter: drop-shadow(0 0 1.5px #dc2626) drop-shadow(0 0 2.5px #dc2626); }
 .plane.selected svg { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px var(--accent)); }
+.ship svg { display: block; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.5)); }
+.ship.selected svg { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px var(--accent)); }
+.ship-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.5); }
 .train.selected { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px var(--accent)); }
 
 #toasts { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1000; display: grid; gap: 8px; }

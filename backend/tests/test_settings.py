@@ -76,7 +76,7 @@ def test_settings_api_saves_and_restarts(client, env):
     body = client.get("/api/settings").json()
     assert body["values"]["home_name"] == "Home" and body["overridden"] == []
     assert body["secrets"] == {"nrod_password": False, "opensky_client_secret": False, "bods_api_key": False,
-                               "national_highways_api_key": False}
+                               "national_highways_api_key": False, "aisstream_api_key": False}
 
     old_state = main.app.state.runtime.state
     resp = client.put("/api/settings", json={"home_name": "Cottage", "home_lat": 51.48, "home_lon": -0.4,

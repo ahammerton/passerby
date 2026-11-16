@@ -32,6 +32,7 @@
         <button type="button" role="tab" data-page="trains">🚆 Trains</button>
         <button type="button" role="tab" data-page="buses">🚌 Buses</button>
         <button type="button" role="tab" data-page="roads">🚧 Roads</button>
+        <button type="button" role="tab" data-page="ships">🚢 Ships</button>
       </nav>
 
       <div class="settings-page" data-page="general" hidden>
@@ -279,6 +280,35 @@
           <label>API key <span class="secret-state" data-secret="national_highways_api_key"></span>
             <input name="national_highways_api_key" type="password" autocomplete="off" data-secret>
             <span class="check"><input type="checkbox" data-clear="national_highways_api_key"> Clear</span></label>
+        </div>
+
+        <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
+          current one, or type a new one to replace it. New ones are checked before they're saved.</p>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="ships" hidden>
+      <section>
+        <h2>Ships</h2>
+        <p id="ships-off" class="hint" hidden>Ships are off: enter an aisstream.io API key under
+          “API key” below to turn them on.</p>
+        <label class="check"><input type="checkbox" name="ships_enabled"> Show ships</label>
+        <div class="fields">
+          <label>Ship radius <span class="unit" data-unit="distance"></span>
+            <input name="ship_radius_km" type="number" step="any" data-kind="distance" data-min="5" data-max="200"></label>
+        </div>
+        <p class="hint">Ships send their position (AIS) every few minutes through aisstream.io, so inland
+          you may need a large radius to reach the coast or a big river.</p>
+        <label class="check"><input type="checkbox" name="ships_show_leisure"> Show sailing boats, pleasure craft and other small boats</label>
+        <p class="hint">Off by default: around marinas they can outnumber everything else.</p>
+        <h3>API key: aisstream.io</h3>
+        <p class="hint">For live ships.
+          <a href="https://aisstream.io/account" target="_blank" rel="noopener">Sign in with GitHub</a>
+          (free), create an API key, then paste it here.</p>
+        <div class="fields">
+          <label>API key <span class="secret-state" data-secret="aisstream_api_key"></span>
+            <input name="aisstream_api_key" type="password" autocomplete="off" data-secret>
+            <span class="check"><input type="checkbox" data-clear="aisstream_api_key"> Clear</span></label>
         </div>
 
         <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the

@@ -77,6 +77,8 @@ function render() {
   field("bus_disruptions").checked = !!values.bus_disruptions;
   field("bus_region").value = values.bus_region || "auto";
   field("roads_enabled").checked = !!values.roads_enabled;
+  field("ships_enabled").checked = !!values.ships_enabled;
+  field("ships_show_leisure").checked = !!values.ships_show_leisure;
   // Secrets: never filled in; just say whether one is saved.
   for (const el of form.querySelectorAll(".secret-state")) {
     el.textContent = loaded.secrets[el.dataset.secret] ? "(saved)" : "(not set)";
@@ -94,6 +96,7 @@ function render() {
   document.getElementById("trains-off").hidden = loaded.trains_available;
   document.getElementById("buses-off").hidden = loaded.secrets.bods_api_key;
   document.getElementById("roads-off").hidden = loaded.secrets.national_highways_api_key;
+  document.getElementById("ships-off").hidden = loaded.secrets.aisstream_api_key;
   renderBackup();
   placeMarker();
   loadStations().catch((e) => console.warn("stations", e));
@@ -294,6 +297,9 @@ function collect() {
     bus_region: field("bus_region").value,
     roads_enabled: field("roads_enabled").checked,
     road_radius_km: round(values.road_radius_km, 2),
+    ships_enabled: field("ships_enabled").checked,
+    ship_radius_km: round(values.ship_radius_km, 2),
+    ships_show_leisure: field("ships_show_leisure").checked,
     readsb_enabled: field("readsb_enabled").checked,
     readsb_url: field("readsb_url").value.trim(),
     online_feeds: field("online_feeds").value,

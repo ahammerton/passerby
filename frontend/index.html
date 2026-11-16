@@ -26,6 +26,7 @@
           <button type="button" data-tab="aircraft-tab" class="active">✈ Aircraft <span id="aircraft-count" class="count">0</span></button>
           <button type="button" data-tab="trains-tab" hidden>🚆 Trains <span id="trains-count" class="count">0</span> <span id="trains-status"></span></button>
           <button type="button" data-tab="buses-tab" hidden>🚌 Buses <span id="buses-count" class="count">0</span> <span id="buses-status"></span></button>
+          <button type="button" data-tab="ships-tab" hidden>🚢 Ships <span id="ships-count" class="count">0</span> <span id="ships-status"></span></button>
           <span class="spacer"></span>
           <input id="filter" type="search" placeholder="Filter…" aria-label="Filter the table">
           <button type="button" id="drawer-toggle" class="icon-button" title="Hide or show the table">▾</button>
@@ -56,6 +57,15 @@
             <div class="credit table-credit">Bus positions from the
               <a href="https://www.gov.uk/guidance/find-and-use-bus-open-data" target="_blank" rel="noopener">Bus Open Data Service</a>
               (Department for Transport), under the Open Government Licence v3.0.</div>
+          </div>
+          <div id="ships-tab" class="tab-panel" hidden>
+            <table class="grid">
+              <thead><tr><th></th><th>Ship</th><th>Flag</th><th>Status</th><th>Destination</th><th>Size</th><th class="num">From home</th></tr></thead>
+              <tbody id="ship-nearby"><tr class="empty"><td colspan="7">Waiting for ships…</td></tr></tbody>
+            </table>
+            <div class="credit table-credit">Ship positions (AIS) from
+              <a href="https://aisstream.io" target="_blank" rel="noopener">aisstream.io</a>, relayed from volunteers' receivers.
+              Small boats are hidden unless turned on in settings.</div>
           </div>
         </div>
       </section>
@@ -130,8 +140,12 @@
 
       <div id="weather-tab" class="tab-panel" hidden>
         <section>
-          <h2>Airport weather</h2>
+          <div class="section-head">
+            <h2>Airport weather</h2>
+            <label class="toggle"><input type="checkbox" id="show-raw-metar"> Show raw METAR</label>
+          </div>
           <ul id="weather" class="list"><li class="empty">Loading…</li></ul>
+          <p class="hint">The latest reports from nearby airports, from aviationweather.gov.</p>
         </section>
       </div>
     </aside>

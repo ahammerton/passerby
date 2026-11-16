@@ -14,6 +14,7 @@ train is about to pass, and keeps a history of what it has seen.
 - **Live map** of aircraft from [adsb.lol](https://adsb.lol), the [OpenSky Network](https://opensky-network.org) and/or your own ADS-B receiver (readsb, tar1090, dump1090). Icons by type, airliners in their airline's colours with logos.
 - **Overhead alerts**, and **interesting aircraft**: emergency squawks, notable types (Beluga, B-52, Spitfire…), types rarely seen near you, and military aircraft.
 - **UK trains** from Network Rail's open data: every train nearby, departure boards, and alerts for trains about to pass your house.
+- **Ships** from AIS via [aisstream.io](https://aisstream.io): names, types, flags, sizes and destinations.
 - **Buses** (England) from the Bus Open Data Service, **road closures** from National Highways, **rain radar** from RainViewer.
 - **History** of every aircraft seen, a **settings page** with backup and restore, and an optional admin password.
 
@@ -29,7 +30,7 @@ docker run -d --name passerby --restart unless-stopped \
 
 Open `http://<server-ip>:8000`. Set your own location with `HOME_LAT` and `HOME_LON`,
 or on the settings page (⚙). Logins for the optional feeds (Network Rail, Bus Open Data,
-National Highways, OpenSky) can be entered there too.
+National Highways, OpenSky, aisstream.io) can be entered there too.
 
 With Docker Compose, use the repository's
 [`docker-compose.yml`](https://github.com/ahammerton/passerby/blob/main/docker-compose.yml)

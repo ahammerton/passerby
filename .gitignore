@@ -4,3 +4,5 @@ data/
 __pycache__/
 .pytest_cache/
 .DS_Store
+# Test fixtures (recorded sample messages), unlike the app's own data folders.
+!backend/tests/data/
