@@ -6,6 +6,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A **home button** under the map's zoom buttons, which takes the map back to the starting view around your home.
+
 ## [0.1.1] - 2026-10-30
 
 ### Added

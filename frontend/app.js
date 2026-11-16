@@ -1589,6 +1589,23 @@ function playRadar(on) {
   step();
 }
 
+// A home button under the zoom buttons: back to the starting view around home.
+const HomeControl = L.Control.extend({
+  options: { position: "topleft" },
+  onAdd() {
+    const el = L.DomUtil.create("div", "leaflet-bar home-control");
+    const a = L.DomUtil.create("a", "", el);
+    a.href = "#";
+    a.title = this.options.title;
+    a.setAttribute("role", "button");
+    a.setAttribute("aria-label", this.options.title);
+    a.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-6h3v6h5V9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+    L.DomEvent.disableClickPropagation(el);
+    L.DomEvent.on(a, "click", (e) => { L.DomEvent.preventDefault(e); this.options.onHome(); });
+    return el;
+  },
+});
+
 const RadarControl = L.Control.extend({
   options: { position: "bottomleft" },
   onAdd() {
@@ -1707,12 +1724,16 @@ async function init() {
   photosEnabled = cfg.photos;
   const home = [cfg.home.lat, cfg.home.lon];
   homeLatLng = home;
-  if (cfg.trains) {
-    // Start zoomed to the train area so nearby trains are visible straight away.
-    map.fitBounds(L.latLng(home).toBounds((cfg.train_radius_km || 5) * 2000));
-  } else {
-    map.setView(home, 9);
-  }
+  const homeView = () => {
+    if (cfg.trains) {
+      // Start zoomed to the train area so nearby trains are visible straight away.
+      map.fitBounds(L.latLng(home).toBounds((cfg.train_radius_km || 5) * 2000));
+    } else {
+      map.setView(home, 9);
+    }
+  };
+  homeView();
+  new HomeControl({ onHome: homeView, title: `Back to ${cfg.home.name}` }).addTo(map);
   if (cfg.buses?.enabled) {
     busMinZoom = cfg.buses.min_zoom;
     document.querySelector('[data-tab="buses-tab"]').hidden = false;
