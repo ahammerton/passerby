@@ -201,6 +201,17 @@
             <input name="nrod_password" type="password" autocomplete="new-password" data-secret>
             <span class="check"><input type="checkbox" data-clear="nrod_password"> Clear</span></label>
         </div>
+        <h3>Rail disruptions</h3>
+        <p class="hint">Incidents and engineering works at your stations (the two above and your departure
+          boards), each train company's status, and station notices, from National Rail. Needs a key:
+          <a href="https://raildata.org.uk" target="_blank" rel="noopener">register at the Rail Data Marketplace</a>
+          (free), subscribe to “NationalRail Disruptions API”, and paste its API key here.</p>
+        <label class="check"><input type="checkbox" name="rail_disruptions_enabled"> Show rail disruptions</label>
+        <div class="fields">
+          <label>API key <span class="secret-state" data-secret="rail_disruptions_api_key"></span>
+            <input name="rail_disruptions_api_key" type="password" autocomplete="off" data-secret>
+            <span class="check"><input type="checkbox" data-clear="rail_disruptions_api_key"> Clear</span></label>
+        </div>
 
         <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
           current one, or type a new one to replace it. New ones are checked before they're saved.</p>
@@ -291,7 +302,7 @@
       <section>
         <h2>Ships</h2>
         <p id="ships-off" class="hint" hidden>Ships are off: enter an aisstream.io API key under
-          “API key” below to turn them on.</p>
+          “API key” below, or your own receiver's address, to turn them on.</p>
         <label class="check"><input type="checkbox" name="ships_enabled"> Show ships</label>
         <div class="fields">
           <label>Ship radius <span class="unit" data-unit="distance"></span>
@@ -301,6 +312,15 @@
           you may need a large radius to reach the coast or a big river.</p>
         <label class="check"><input type="checkbox" name="ships_show_leisure"> Show sailing boats, pleasure craft and other small boats</label>
         <p class="hint">Off by default: around marinas they can outnumber everything else.</p>
+        <div class="fields">
+          <label>Interesting ship alerts
+            <select name="ship_alerts">
+              <option value="all">Emergency beacons, and cruise ships, warships and giant ships under way</option>
+              <option value="emergencies">Emergency beacons only</option>
+              <option value="off">None</option>
+            </select>
+          </label>
+        </div>
         <h3>API key: aisstream.io</h3>
         <p class="hint">For live ships.
           <a href="https://aisstream.io/account" target="_blank" rel="noopener">Sign in with GitHub</a>
@@ -310,6 +330,20 @@
             <input name="aisstream_api_key" type="password" autocomplete="off" data-secret>
             <span class="check"><input type="checkbox" data-clear="aisstream_api_key"> Clear</span></label>
         </div>
+
+        <h3>Your own AIS receiver (optional)</h3>
+        <p class="hint">Near the coast or a big river, an RTL-SDR dongle and a VHF antenna running
+          <a href="https://github.com/jvde-github/AIS-catcher" target="_blank" rel="noopener">AIS-catcher</a>
+          hear ships directly, every few seconds. It works alongside aisstream.io, or without it.</p>
+        <div class="fields">
+          <label>Receiver address
+            <input name="ais_receiver" type="text" placeholder="udp://0.0.0.0:10110 or tcp://192.168.1.50:5012"
+              autocomplete="off" spellcheck="false"></label>
+        </div>
+        <p class="hint"><code>udp://0.0.0.0:10110</code>: Passerby listens; run <code>AIS-catcher -u &lt;this
+          machine's address&gt; 10110</code> (in Docker, publish <code>10110:10110/udp</code>).
+          <code>tcp://host:port</code>: Passerby connects to the receiver; run <code>AIS-catcher -S 5012</code>.
+          Anything that sends standard <code>!AIVDM</code> NMEA works.</p>
 
         <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
           current one, or type a new one to replace it. New ones are checked before they're saved.</p>

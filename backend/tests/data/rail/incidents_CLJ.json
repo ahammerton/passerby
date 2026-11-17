@@ -1,0 +1,79 @@
+[
+ {
+  "crsCode": "CLJ",
+  "disruptions": [
+   {
+    "id": "9B531E36A5B749998D9F85D061FDE22D",
+    "version": "20261117103700",
+    "summary": "Disruption in the Brockenhurst area expected until 12:00",
+    "description": "<p>A <a href=\"https://www.networkrail.co.uk/running-the-railway/looking-after-the-railway/delays-explained/signals-points-failure/\" title=\"\">fault with the signalling system</a> in the Brockenhurst area means that trains have to run at a reduced speed on all lines. As a result, trains running through this area may be cancelled, delayed by up to 30 minutes or revised.</p><p>This is expected until 12:00.</p><p><strong>South Western Railway customer advice:</strong></p><p>Train services running between these stations are expected to be delayed, altered or cancelled.</p><p><strong>How do I get to my destination?</strong></p><p>You can continue to use train services through the area, but please allow extra time for your journey due to delays and short notice alterations.</p><p>You can use your ticket, at no extra cost to yourself, on CrossCountry services between Bournemouth and Basingstoke.<em> Please note that CrossCountry are also affected by this disruption.</em></p><p>If you need any help with your journey, please speak to a member of staff or use a station help point.</p><p><strong>Ticket flexibility:</strong></p><p>If your train is cancelled, you will be able to travel on an alternative service operated by any other <a href=\"https://www.nationalrail.co.uk/help-and-assistance/ticket-acceptance/\" title=\"\">participating train company</a><u>,</u> either two hours before or two hours after the original departure time of the cancelled service, in order to reach your destination.</p><p>If you decide not to travel or cannot complete your journey due to cancellations, you are entitled to a full refund from your original point of sale.</p><p>For further information and guidance please contact your train company or speak to a member of railway staff.</p><p><strong>Check before you travel:</strong></p><p>You can check your journey using the National Rail real-time <a href=\"https://www.nationalrail.co.uk/journey-planner/\" title=\"\">Journey Planner</a>.</p><p><strong>Compensation:</strong></p><p>You may be entitled to <a href=\"https://www.nationalrail.co.uk/help-and-assistance/compensation-and-refunds/\" title=\"\">compensation</a> if you experience a delay in completing your journey today. Please keep your train ticket and make a note of your journey, as both will be required to support any claim.</p>",
+    "status": "Active",
+    "isAlert": false,
+    "isPlanned": false,
+    "affectedOperators": [
+     {
+      "tocCode": "XC",
+      "tocName": "CrossCountry"
+     },
+     {
+      "tocCode": "SW",
+      "tocName": "South Western Railway"
+     }
+    ],
+    "affectedRoutes": [
+     {
+      "routeDetails": "<p>CrossCountry between Bournemouth and Nottingham / Manchester Piccadilly </p><p>South Western Railway between Weymouth and London Waterloo, between Poole / Bournemouth and Winchester </p>"
+     }
+    ],
+    "startDateTime": "2026-11-17T09:38:00.000+00:00",
+    "createdDateTime": "2026-11-17T09:38:48.946Z",
+    "lastModifiedDateTime": "2026-11-17T10:37:00.350Z",
+    "lastChangedBy": "NRE CMS Editor",
+    "disruptionLinks": [
+     {
+      "label": "Incident detail page",
+      "uri": "https://www.nationalrail.co.uk/service-disruptions/brockenhurst-20261117/"
+     }
+    ]
+   },
+   {
+    "id": "8FAEC9BADFF945EDA21EC85B90DA4333",
+    "version": "20261117104045",
+    "summary": "Delays between Gatwick Airport and Redhill expected until 11:45",
+    "description": "<p>A safety inspection of the track between Gatwick Airport and Redhill means that trains have to run at a reduced speed on some lines towards Redhill. As a result, trains running between these stations may be delayed by up to 20 minutes.</p><p>This is expected until 11:45.</p><p><strong>Southern / Thameslink customer advice:</strong></p><p>You can use your normal route, however, you should allow an extra 10 minutes to complete your journey.</p><p>Please check customer information boards and online journey planners for the latest travel information.</p><p>Late-running trains may be revised. This means they may not stop at all of the usual stations, or they may terminate part of the way along their usual routes.</p><p>If you are travelling to Earlswood or Salfords, in the direction towards Redhill, you will need to use Metrobus route 100 from Gatwick Airport to complete your journey.</p><p>If you are travelling from Earlswood or Salfords in the direction towards London, please use Metrobus route 100 to Redhill to change for a service towards London.</p><p><strong>Tickets are being accepted at no extra cost on:</strong></p><ul><li>Metrobus route 100 between Three Bridges, Crawley, Gatwick Airport, Horley, Salfords, Earlswood, Redhill</li></ul><p></p><p><strong>Planning your journey:</strong></p><p>For help planning your journey, check live <a href=\"https://www.southernrailway.com/service-updates/live-departures-and-arrivals\" title=\"\"><u>departure boards</u></a>, view a live <a href=\"https://livemap.southernrailway.com/#/mapview\" title=\"\"><u>network map</u></a> or see <a href=\"https://www.southernrailway.com/service-updates/service-updates/alternative-route-maps\" title=\"\"><u>alternative route guides</u></a>. </p><p>If you\u2019re travelling within London, you can use the <a href=\"https://tfl.gov.uk/plan-a-journey/\" title=\"\"><u>TfL Journey Planner</u></a>.</p><p>Stay up to date on the move with Southern\u2019s <a href=\"https://whatsapp.com/channel/0029VbD8mfo4Crfrcqoy8H46\" title=\"\"><u>WhatsApp channel</u></a>. Live updates are available Monday to Friday, 07:00\u201321:00.</p><p><strong>Can you tell me more about the incident?</strong></p><p>Network Rail is carrying out a safety inspection of the track between Gatwick Airport and Redhill following a report of a possible fault in the area. As a precaution, trains are travelling at reduced speeds through the affected area until the track has been checked.</p><p>These speed restrictions allow trains to continue running safely while the issue is investigated. However, journeys through the area will take longer than usual, and trains may begin to queue behind one another. Some services may also need to be cancelled or changed to prevent delays from spreading across the wider network.</p><p>Once the inspection is complete, Network Rail will confirm whether any repairs are needed or if trains can return to normal speeds.</p><p><strong>Check before you travel:</strong></p><p>You can check your journey using the National Rail real-time <a href=\"https://www.nationalrail.co.uk/journey-planner/\" title=\"\">Journey Planner</a>.</p><p><strong>Compensation:</strong></p><p>You may be entitled to <a href=\"https://www.nationalrail.co.uk/help-and-assistance/compensation-and-refunds/\" title=\"\">compensation</a> if you experience a delay in completing your journey today. Please keep your train ticket and make a note of your journey, as both will be required to support any claim.</p>",
+    "status": "Active",
+    "isAlert": false,
+    "isPlanned": false,
+    "affectedOperators": [
+     {
+      "tocCode": "GW",
+      "tocName": "Great Western Railway"
+     },
+     {
+      "tocCode": "SN",
+      "tocName": "Southern"
+     },
+     {
+      "tocCode": "TL",
+      "tocName": "Thameslink"
+     }
+    ],
+    "affectedRoutes": [
+     {
+      "routeDetails": "<p>Great Western Railway between Gatwick Airport and Reading </p><p>Southern between Ore / Eastbourne / Portsmouth Harbour / Bognor Regis / Littlehampton and London Victoria, and also between Gatwick Airport and Redhill </p><p>Thameslink between Brighton / Three Bridges and Bedford, between Brighton and Cambridge / Peterborough, and also between Horsham and Peterborough </p>"
+     }
+    ],
+    "startDateTime": "2026-11-17T10:19:00.000+00:00",
+    "createdDateTime": "2026-11-17T10:19:50.802Z",
+    "lastModifiedDateTime": "2026-11-17T10:40:45.821Z",
+    "lastChangedBy": "NRE CMS Editor",
+    "disruptionLinks": [
+     {
+      "label": "Incident detail page",
+      "uri": "https://www.nationalrail.co.uk/service-disruptions/redhill-20261117/"
+     }
+    ]
+   }
+  ]
+ }
+]

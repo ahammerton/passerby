@@ -24,11 +24,16 @@ from .airlines import ICAO_CODE, Logos, identify
 from .interesting import RARE_WINDOW_DAYS, Interest
 from .bus_timetable import FILE as BUS_TIMETABLE_FILE
 from .bus_timetable import BusTimetable, area_key, build, download, pick_region, stale
-from . import radar, roads as road_closures
+from . import radar, rail_disruptions, roads as road_closures
+from .rail_disruptions import RailDisruptions
 from .roads import Roads
 from .bus_disruptions import INTERVAL_S, Disruptions
 from .buses import BusFeedError, BusTracker, check_bods_key
 from .ships import feed as ship_feed
+from .ships.interesting import ShipInterest
+from .ships.receiver import AisReceiver
+from .ships.ports import RETRY_SECONDS as PORTS_RETRY_SECONDS
+from .ships.ports import load_ports
 from .ships.tracker import ShipDetails, ShipTracker
 from .airports import Airport, load_airports, nearest_airports
 from .config import Settings, env_settings, get_settings, read_overrides, reload_settings, write_overrides
@@ -40,6 +45,7 @@ from .sources import (
     ADSBLOL_URL, AIRPLANESLIVE_URL, AircraftSource, CommunitySource, OpenSkySource, ReadsbSource, find_receiver,
 )
 from .store import SightingStore
+from .trains.timetable import UK
 from .trains import (
     MARGIN_KM, ServiceInfo, TimetableFeed, TrainTracker, TrustFeed, load_corpus, load_railways, load_station_layout,
     load_stations, read_tiplocs, stations_within,
@@ -93,8 +99,10 @@ class AppState:
         self.train_state: dict | None = None
         self.buses: BusTracker | None = None
         self.roads: Roads | None = None
+        self.rail: RailDisruptions | None = None
         self.ships: ShipTracker | None = None
         self.ship_details: ShipDetails | None = None
+        self.ship_interest = ShipInterest(settings.ship_alerts)
 
 
 def build_sources(settings: Settings, client: httpx.AsyncClient) -> list[AircraftSource]:
@@ -150,6 +158,40 @@ async def build_train_tracker(settings: Settings, client: httpx.AsyncClient) -> 
     if tracker.watch_warning:
         log.warning("Trains past home: %s", tracker.watch_warning)
     return tracker
+
+
+async def build_rail_disruptions(state: AppState) -> RailDisruptions | None:
+    """Disruptions at your watched line's stations and departure boards (or the station nearest home)."""
+    s = state.settings
+    try:
+        stations = state.trains.stations if state.trains else await load_stations(state.client, s.data_dir)
+    except Exception as exc:
+        log.error("Rail disruptions disabled: no station list (%s)", exc)
+        return None
+    try:
+        watch = list(s.train_watch_codes or ())
+    except ValueError:
+        watch = []
+    boards = [b.crs for b in state.trains.board_stations] if state.trains else s.train_board_codes
+    codes = [c for c in dict.fromkeys(watch + boards) if c in stations]
+    if not codes:
+        codes = [st.crs for st in stations_within(stations, s.home_lat, s.home_lon, 50)[:1]]
+    log.info("Rail disruptions for %s", ", ".join(codes))
+    return RailDisruptions(state.client, s.rail_disruptions_api_key, [(c, stations[c].name) for c in codes])
+
+
+async def keep_rail_operators(state: AppState) -> None:
+    """Which train companies call at the disruption stations, from the timetable, hourly."""
+    while True:
+        trains = state.trains
+        if trains and trains.timetable and trains.info:
+            today = datetime.now(UK).date()
+            try:
+                state.rail.operators = set().union(*(trains.info.operators_at(trains.timetable, crs, today)
+                                                     for crs, _ in state.rail.stations))
+            except Exception as exc:
+                log.warning("Rail operators: %s", exc)
+        await asyncio.sleep(3600 if state.rail.operators else 300)
 
 
 async def load_rail_lines(state: AppState) -> None:
@@ -340,15 +382,33 @@ async def poll_weather(state: AppState) -> None:
 
 
 async def save_ship_details(state: AppState) -> None:
-    """Ship details go to disk once a minute (and on shutdown), not on every message."""
+    """Ship details go to disk once a minute (and on shutdown), not on every message. Visits are
+    logged at the same time, and each ship's visit history read back."""
     try:
+        state.ships.history = await asyncio.to_thread(state.ship_details.visit_summary)
         while True:
             await asyncio.sleep(60)
             if changed := state.ships.take_dirty():
                 await asyncio.to_thread(state.ship_details.save, changed)
+            state.ships.expire()
+            positions = {m: {"distance_km": p["distance_km"]} for m, p in state.ships.positions.items()}
+            await asyncio.to_thread(state.ship_details.record_visits, positions)
+            state.ships.history = await asyncio.to_thread(state.ship_details.visit_summary)
     finally:
         if changed := state.ships.take_dirty():
             state.ship_details.save(changed)
+
+
+async def load_port_names(state: AppState) -> None:
+    """UN/LOCODE port names for ship destinations; ships show the codes as typed until they load."""
+    while True:
+        try:
+            state.ships.ports = await load_ports(state.client, state.settings.data_dir)
+            log.info("Loaded %d port names", len(state.ships.ports))
+            return
+        except Exception as exc:
+            log.warning("Port names unavailable: %s", exc)
+            await asyncio.sleep(PORTS_RETRY_SECONDS)
 
 
 # Ships move slowly and report every few minutes: send them every few broadcasts, not every one.
@@ -390,8 +450,13 @@ async def broadcast_loop(state: AppState) -> None:
             message["buses"] = state.buses.snapshot()
         if state.roads:
             message["roads"] = state.roads.snapshot()
+        if state.rail:
+            message["rail"] = state.rail.snapshot()
+            alert_messages += [{"type": "rail_alert", "incident": i} for i in state.rail.take_alerts()]
         if state.ships and tick % SHIPS_EVERY == 1:
             message["ships"] = state.ships.snapshot()
+            alert_messages += [{"type": "ship_alert", "ship": s}
+                               for s in state.ship_interest.new_alerts(message["ships"]["ships"])]
         for ws in list(state.clients):
             try:
                 await ws.send_json(message)
@@ -447,6 +512,11 @@ class Runtime:
                                                       settings.home_lon, settings.bus_radius_km)
                 tasks.append(asyncio.create_task(poll_bus_disruptions(state)))
             log.info("Buses within %s km every %ss", settings.bus_radius_km, settings.bus_interval)
+        if settings.rail_disruptions_available:
+            state.rail = await build_rail_disruptions(state)
+            if state.rail:
+                tasks.append(asyncio.create_task(rail_disruptions.run(state.rail)))
+                tasks.append(asyncio.create_task(keep_rail_operators(state)))
         if settings.roads_available:
             state.roads = Roads(client, settings.national_highways_api_key, settings.home_lat, settings.home_lon,
                                 settings.road_radius_km)
@@ -455,12 +525,25 @@ class Runtime:
         if settings.ships_available:
             state.ship_details = ShipDetails(settings.data_dir / "ships.db")
             state.ships = ShipTracker(settings.home_lat, settings.home_lon, settings.ship_radius_km,
-                                      settings.ships_show_leisure, await asyncio.to_thread(state.ship_details.load))
-            request = ship_feed.subscription(settings.aisstream_api_key, settings.home_lat, settings.home_lon,
-                                             settings.ship_radius_km)
-            tasks.append(asyncio.create_task(
-                ship_feed.AisStreamFeed(request, state.ships.ingest, state.ships.status).run()))
+                                      settings.ships_show_leisure, await asyncio.to_thread(state.ship_details.load),
+                                      aisstream=bool(settings.aisstream_api_key))
+            if settings.aisstream_api_key:
+                request = ship_feed.subscription(settings.aisstream_api_key, settings.home_lat, settings.home_lon,
+                                                 settings.ship_radius_km)
+                tasks.append(asyncio.create_task(
+                    ship_feed.AisStreamFeed(request, state.ships.ingest, state.ships.status).run()))
+            if settings.ais_receiver:
+                state.ships.receiver_status = {}
+                try:
+                    receiver = AisReceiver(settings.ais_receiver,
+                                           lambda msg: state.ships.ingest(msg, source="receiver"),
+                                           state.ships.receiver_status)
+                    tasks.append(asyncio.create_task(receiver.run()))
+                except ValueError as exc:
+                    state.ships.receiver_status.update(ok=False, connected=False, error=str(exc))
+                    log.warning("AIS receiver: %s", exc)
             tasks.append(asyncio.create_task(save_ship_details(state)))
+            tasks.append(asyncio.create_task(load_port_names(state)))
             log.info("Ships within %s km (%d known)", settings.ship_radius_km, len(state.ships.details))
         tasks.append(asyncio.create_task(poll_weather(state)))
         if settings.enrichment_enabled:
@@ -535,6 +618,7 @@ def config():
         "passing_window": {"enabled": s.passing_window, "minutes": s.passing_minutes},
         "buses": {"enabled": tracker().buses is not None, "min_zoom": s.bus_min_zoom},
         "roads": {"enabled": tracker().roads is not None},
+        "rail": {"enabled": tracker().rail is not None},
         "ships": {"enabled": tracker().ships is not None},
         "units": {"distance": s.distance_unit, "altitude": s.altitude_unit, "speed": s.speed_unit},
         "aircraft_colours": s.aircraft_colours,
@@ -617,6 +701,9 @@ async def put_user_settings(update: SettingsUpdate):
     if changes.get("bods_api_key") and (problem := await check_bods_key(client, changes["bods_api_key"])):
         raise HTTPException(422, problem)
     if changes.get("aisstream_api_key") and (problem := await ship_feed.check_key(changes["aisstream_api_key"])):
+        raise HTTPException(422, problem)
+    if changes.get("rail_disruptions_api_key") and (
+            problem := await rail_disruptions.check_key(client, changes["rail_disruptions_api_key"])):
         raise HTTPException(422, problem)
     if changes.get("national_highways_api_key") and (
             problem := await road_closures.check_key(client, changes["national_highways_api_key"])):
@@ -823,8 +910,17 @@ async def station(crs: str):
 def ships():
     state = tracker()
     if state.ships is None:
-        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY)")
+        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY or AIS_RECEIVER)")
     return state.ships.snapshot()
+
+
+@app.get("/api/ships/history")
+def ship_history(limit: int = 100):
+    """Recent ship visits, newest first."""
+    state = tracker()
+    if state.ship_details is None:
+        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY or AIS_RECEIVER)")
+    return state.ship_details.recent_visits(min(max(limit, 1), 1000))
 
 
 @app.get("/api/ships/{mmsi}")
@@ -832,7 +928,7 @@ def ship(mmsi: int):
     """One ship, with its recent track."""
     state = tracker()
     if state.ships is None:
-        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY)")
+        raise HTTPException(404, "Ships are not enabled (set AISSTREAM_API_KEY or AIS_RECEIVER)")
     found = state.ships.ship(mmsi)
     if found is None:
         raise HTTPException(404, "That ship isn't reporting nearby any more")
@@ -860,6 +956,15 @@ def bus_route(id: str):
     if route is None:
         raise HTTPException(404, "That bus couldn't be matched to a timetable")
     return route
+
+
+@app.get("/api/rail/disruptions")
+def rail():
+    """Disruptions at your stations: incidents, station messages and train company status."""
+    state = tracker()
+    if state.rail is None:
+        raise HTTPException(404, "Rail disruptions are not enabled (set RAIL_DISRUPTIONS_API_KEY)")
+    return state.rail.snapshot()
 
 
 @app.get("/api/roads")
@@ -922,7 +1027,10 @@ def history(limit: int = 100, overhead_only: bool = False):
 def stats():
     store = tracker().store
     now = time.time()
-    return {"last_24h": store.stats(now - 86400), "last_7d": store.stats(now - 7 * 86400)}
+    result = {"last_24h": store.stats(now - 86400), "last_7d": store.stats(now - 7 * 86400)}
+    if ships := tracker().ship_details:
+        result["ships"] = {"last_24h": ships.visit_stats(now - 86400), "last_7d": ships.visit_stats(now - 7 * 86400)}
+    return result
 
 
 @app.websocket("/ws")
@@ -944,6 +1052,8 @@ async def websocket(ws: WebSocket):
             first["buses"] = state.buses.snapshot()
         if state.roads:
             first["roads"] = state.roads.snapshot()
+        if state.rail:
+            first["rail"] = state.rail.snapshot()
         await ws.send_json(first)
         while True:
             await ws.receive_text()  # clients don't send anything; this detects disconnects

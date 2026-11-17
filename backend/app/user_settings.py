@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import Settings
+from .ships.receiver import parse_address
 
 # Changing these moves or resizes the train area: track and timetable are fetched again.
 TRAIN_AREA_KEYS = {"home_lat", "home_lon", "train_radius_km"}
@@ -17,7 +18,7 @@ TRAIN_AREA_KEYS = {"home_lat", "home_lon", "train_radius_km"}
 RECEIVER_KEYS = {"readsb_enabled", "readsb_url"}
 # Never returned to the browser.
 SECRET_KEYS = {"nrod_password", "opensky_client_secret", "bods_api_key", "national_highways_api_key",
-               "aisstream_api_key"}
+               "aisstream_api_key", "rail_disruptions_api_key"}
 NROD_KEYS = {"nrod_username", "nrod_password"}
 OPENSKY_KEYS = {"opensky_client_id", "opensky_client_secret"}
 
@@ -64,12 +65,16 @@ class SettingsUpdate(BaseModel):
     bus_delays: bool | None = None
     bus_disruptions: bool | None = None
 
+    rail_disruptions_enabled: bool | None = None
+
     roads_enabled: bool | None = None
     road_radius_km: float | None = Field(None, ge=1, le=50)
 
     ships_enabled: bool | None = None
     ship_radius_km: float | None = Field(None, ge=5, le=200)
     ships_show_leisure: bool | None = None
+    ship_alerts: Literal["all", "emergencies", "off"] | None = None
+    ais_receiver: str | None = Field(None, max_length=200)
     bus_region: Literal["auto", "south_east", "london", "south_west", "east_anglia", "east_midlands",
                         "west_midlands", "north_west", "north_east", "yorkshire"] | None = None
 
@@ -81,14 +86,24 @@ class SettingsUpdate(BaseModel):
     bods_api_key: str | None = Field(None, max_length=200)
     national_highways_api_key: str | None = Field(None, max_length=200)
     aisstream_api_key: str | None = Field(None, max_length=200)
+    rail_disruptions_api_key: str | None = Field(None, max_length=200)
     # planespotters.net needs a contact (email or URL) in requests before it serves photos.
     contact: str | None = Field(None, max_length=200)
 
     @field_validator("nrod_username", "nrod_password", "opensky_client_id", "opensky_client_secret", "contact",
-                     "readsb_url", "bods_api_key", "national_highways_api_key", "aisstream_api_key")
+                     "readsb_url", "bods_api_key", "national_highways_api_key", "aisstream_api_key",
+                     "rail_disruptions_api_key")
     @classmethod
     def _strip(cls, v: str | None) -> str | None:
         return v.strip() if v is not None else v
+
+    @field_validator("ais_receiver")
+    @classmethod
+    def _ais_receiver(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return v if v is None else ""
+        parse_address(v)  # a ValueError explains what's wrong
+        return v.strip()
 
     @field_validator("train_watch")
     @classmethod
@@ -144,5 +159,6 @@ def settings_payload(current: Settings, defaults: Settings, overridden: dict, tr
             "bods_api_key": bool(current.bods_api_key),
             "national_highways_api_key": bool(current.national_highways_api_key),
             "aisstream_api_key": bool(current.aisstream_api_key),
+            "rail_disruptions_api_key": bool(current.rail_disruptions_api_key),
         },
     }

@@ -94,6 +94,10 @@ class ServiceInfo:
             self._boards[key] = rows
         return self._boards[key]
 
+    def operators_at(self, tt: Timetable, crs: str, run_date: date) -> set[str]:
+        """Codes of the passenger train companies with departures from a station on a date."""
+        return {s.atoc for _, s, _, _, _ in self._board_base(tt, crs, run_date) if s.atoc and s.atoc != "ZZ"}
+
     def board(self, tt: Timetable, station: Station, now: float, live: dict, cancelled: set) -> dict:
         """Next departures from a station, with live running where the train is being tracked.
 

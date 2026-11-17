@@ -553,6 +553,7 @@ function selectedItem() {
   if (kind === "disruption") return latestDisruptions?.find((d) => d.id === id);
   if (kind === "road") return latestRoads.find((r) => r.id === id);
   if (kind === "ship") return latestShips.find((s) => s.mmsi === id);
+  if (kind === "rail") return latestRail?.incidents.find((i) => i.id === id);
   return null;
 }
 
@@ -576,6 +577,8 @@ function select(kind, id) {
     drawRoads();
   } else if (kind === "train") {
     map.setView(trainMarkers.get(id)?.getLatLng() || [item.lat, item.lon], Math.max(map.getZoom(), SELECT_ZOOM.train));
+  } else if (kind === "rail") {
+    // Incidents name areas, not places on the map: just the details.
   } else if (kind === "ship") {
     if (!map.hasLayer(shipLayer)) shipLayer.addTo(map);
     map.setView(shipPosition(item), Math.max(map.getZoom(), SELECT_ZOOM.ship));
@@ -602,7 +605,8 @@ function deselect() {
 }
 
 const DETAILS_TITLE = { aircraft: "✈ Selected aircraft", train: "🚆 Selected train", bus: "🚌 Selected bus",
-  disruption: "⚠ Bus disruption", road: "🚧 Road closure", ship: "🚢 Selected ship" };
+  disruption: "⚠ Bus disruption", road: "🚧 Road closure", ship: "🚢 Selected ship",
+  rail: "🚆 Rail disruption" };
 
 // Re-rendered on every update while something is selected.
 function renderDetails() {
@@ -619,6 +623,7 @@ function renderDetails() {
     : selection.kind === "train" ? trainPopup(item)
     : selection.kind === "disruption" ? disruptionHtml(item)
     : selection.kind === "road" ? roadHtml(item)
+    : selection.kind === "rail" ? railHtml(item)
     : selection.kind === "ship" ? shipPopup(item) : busPopup(item);
   el.hidden = false;
   el.innerHTML = `<button type="button" class="group-head details-head" title="Close">${DETAILS_TITLE[selection.kind]}</button>
@@ -634,7 +639,7 @@ document.getElementById("details").addEventListener("click", (e) => {
 // Controls (tabs, buttons, links, the filter...) and the details card itself don't count.
 map.on("click", () => selection.kind && deselect());
 document.addEventListener("click", (e) => {
-  if (!selection.kind || e.target.closest(`#map, #details, #station-view, [data-icao], [data-train], [data-bus], [data-disruption], [data-road], [data-ship],
+  if (!selection.kind || e.target.closest(`#map, #details, #station-view, [data-icao], [data-train], [data-bus], [data-disruption], [data-road], [data-ship], [data-rail],
       button, a, input, select, summary, label, #drawer-handle`)) return;
   deselect();
 });
@@ -786,11 +791,13 @@ async function loadWeather() {
 
 async function loadStats() {
   try {
-    const s = (await getJSON("/api/stats")).last_24h;
+    const stats = await getJSON("/api/stats");
+    const s = stats.last_24h;
     document.getElementById("stats").innerHTML =
       `<div><b>${s.aircraft}</b><span>aircraft</span></div>
        <div><b>${s.visits}</b><span>sightings</span></div>
-       <div><b>${s.overhead}</b><span>overhead</span></div>`;
+       <div><b>${s.overhead}</b><span>overhead</span></div>` +
+      (stats.ships ? `<div><b>${stats.ships.last_24h.ships}</b><span>vessels</span></div>` : "");
   } catch (e) {
     console.warn(e);
   }
@@ -969,6 +976,7 @@ function renderTrains(trains) {
 
   document.getElementById("train-boards").innerHTML = (trains.boards || []).map((b) => `
     <h2><a href="#" class="station-link" data-crs="${esc(b.crs)}" title="Open the station view">${esc(b.name)}</a></h2>
+    ${stationMessagesHtml(b.crs)}
     <ul class="list">${b.departures.length ? b.departures.map((d) => `<li>
       <div class="row"><span><b>${esc(clock(d.time))}</b> ${d.bus ? "🚌 " : ""}${esc(d.destination)}</span>
         <span class="meta">${d.platform ? `Plat ${esc(d.platform)}` : ""}</span></div>
@@ -1614,6 +1622,79 @@ function roadHtml(r) {
     <div class="credit">National Highways (motorways and major A-roads) · Open Government Licence</div>`;
 }
 
+// ---------- rail disruptions (National Rail, via the Rail Data Marketplace) ----------
+
+let latestRail = null;
+
+// "Since 09:38", "Until Fri 21 Nov", "Sat 06:00 – Mon 05:00" (planned works).
+function railWhen(i) {
+  const now = Date.now() / 1000;
+  const short = (t) => (Math.abs(t - now) < 18 * 3600 ? clock(t) : fmtDay(t));
+  if (i.start && i.start > now) return `${short(i.start)}${i.end ? ` – ${short(i.end)}` : ""}`;
+  if (i.end) return `Until ${short(i.end)}`;
+  return i.start ? `Since ${short(i.start)}` : "";
+}
+
+function railOperators(i) {
+  return i.operators.map((o) => o.name || o.code).join(", ");
+}
+
+function renderRail(snapshot) {
+  latestRail = snapshot;
+  const st = snapshot.status || {};
+  document.getElementById("rail-status").innerHTML = `<span class="dot ${st.ok ? "ok" : st.ok === false ? "err" : ""}"
+    title="${esc(st.ok === false ? st.error || "error" : "National Rail, every 5 minutes")}"></span>`;
+  document.getElementById("rail-stations").textContent = snapshot.stations.map((s) => s.name).join(", ");
+  // Without the timetable (or any disruption naming them) the companies aren't known: no section.
+  document.getElementById("rail-operators").closest("section").hidden = !snapshot.operators.length && st.ok !== false;
+  document.getElementById("rail-operators").innerHTML = snapshot.operators.length
+    ? snapshot.operators.map((o) => `<li class="${o.good ? "good" : ""}"><div class="row">
+        <span>${o.good ? "✓" : "⚠"} <b>${esc(o.name)}</b></span></div>
+        ${o.good ? "" : `<div class="row meta"><span>${esc(o.status)}</span></div>`}</li>`).join("")
+    : `<li class="empty">${st.ok === false ? `Couldn't get disruptions: ${esc(st.error || "error")}` : st.ok ? "No train companies to show" : "Loading…"}</li>`;
+  const list = snapshot.incidents;
+  document.getElementById("rail-count").textContent = list.length;
+  document.getElementById("rail-incidents").innerHTML = list.length
+    ? list.map((i) => `<li data-rail="${esc(i.id)}" class="${i.planned ? "planned" : ""}">
+        <div class="row"><span class="callsign">${i.planned ? "🛠" : "⚠"} ${esc(i.summary)}</span></div>
+        <div class="row meta"><span>${esc([i.planned ? "Engineering works" : null, railWhen(i), railOperators(i)].filter(Boolean).join(" · "))}</span></div></li>`).join("")
+    : `<li class="empty">${st.ok ? "Nothing disrupting your stations" : st.ok === false ? "—" : "Loading…"}</li>`;
+  if (selection.kind === "rail") renderDetails();
+}
+document.getElementById("rail-incidents").addEventListener("click", (e) => {
+  const li = e.target.closest("[data-rail]");
+  if (li) select("rail", li.dataset.rail);
+});
+
+const paragraphs = (text) => (text || "").split("\n").map((p) => `<p>${esc(p)}</p>`).join("");
+
+function railHtml(i) {
+  const rows = [["What", i.planned ? "Planned engineering works" : "Unplanned disruption"], ["When", railWhen(i)],
+    ["Train companies", railOperators(i)], ["Your stations", (i.station_names || []).join(", ")],
+    ["Routes", i.routes]].filter(([, v]) => v);
+  return `<b>${esc(i.summary)}</b>
+    <table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v).replaceAll("\n", "<br>")}</td></tr>`).join("")}</table>
+    ${i.description ? `<div class="rail-advice">${paragraphs(i.description)}</div>` : ""}
+    ${i.url ? `<div class="meta"><a href="${esc(i.url)}" target="_blank" rel="noopener">Full details on National Rail</a></div>` : ""}
+    <div class="credit">National Rail Enquiries, via the Rail Data Marketplace</div>`;
+}
+
+// The notice shown at a station (and any standing notice, such as opening hours), on its departure board.
+function stationMessagesHtml(crs) {
+  const st = latestRail?.stations.find((s) => s.crs === crs);
+  if (!st || (!st.messages.length && !st.notice)) return "";
+  return `<div class="board-messages">${st.messages.map((m) => `<p>⚠ ${esc(m.text)}${m.url
+    ? ` <a href="${esc(m.url)}" target="_blank" rel="noopener">More</a>` : ""}</p>`).join("")}${st.notice ? paragraphs(st.notice) : ""}</div>`;
+}
+
+function onRailAlert(i) {
+  const text = `🚆 ${i.summary}${i.operators.length ? ` (${railOperators(i)})` : ""}`;
+  toast(text, "interesting");
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("Rail disruption", { body: text });
+  }
+}
+
 // ---------- rain radar (RainViewer): the last two hours, playable ----------
 // One tile layer per frame, all loaded, only the shown one visible, so playing doesn't flicker.
 
@@ -1731,6 +1812,7 @@ const SHIP_ALWAYS = new Set(["passenger", "military", "sar", "beacon"]);
 const SHIP_PREDICT_MAX_S = 15 * 60; // stop moving a ship on after this long without a report
 const MS_TO_KT = 1.943844;
 
+const SHIP_FEEDS = { aisstream: "aisstream.io", receiver: "📡 Your receiver" };
 const shipName = (s) => s.name || `MMSI ${s.mmsi}`;
 const shipType = (s) => s.type || SHIP_CATEGORY[s.category] || "Vessel";
 const flagEmoji = (code) => (/^[A-Z]{2}$/.test(code || "")
@@ -1741,6 +1823,15 @@ const flagName = (code) => { try { return (code && regionNames?.of(code)) || cod
 const shipMoving = (s) => !s.still && s.speed_kt != null && s.speed_kt >= 0.5;
 const shipBearing = (s) => s.heading ?? s.course;
 const shipSize = (s) => (s.length_m >= 200 ? 24 : s.length_m >= 80 ? 20 : 16);
+// Why a ship is interesting, as a badge after its name.
+const SHIP_BADGE = { emergency: "🚨 SOS", notable: "✨ NOTABLE" };
+const shipBadge = (s) => (SHIP_BADGE[s.interest?.level]
+  ? ` <span class="badge-int ${s.interest.level}" title="${esc(s.interest.reason)}">${SHIP_BADGE[s.interest.level]}</span>` : "");
+// "Antwerpen → Dagenham" when the destination was given as port codes (BEANR>GBDAG), else as typed.
+function shipDestination(s) {
+  if (!s.route) return s.destination || null;
+  return s.route.stops.map((p) => p.name).join(s.route.round_trip ? " ⇄ " : " → ");
+}
 const shipDate = (t) => (t ? new Date(t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null);
 
 function shipIcon(s) {
@@ -1753,7 +1844,8 @@ function shipIcon(s) {
     : `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform: rotate(${Math.round(bearing ?? 0)}deg)">
         <path d="M12 1.5 L17 8 L17 21.5 Q12 23 7 21.5 L7 8 Z" fill="${colour}" stroke="#000" stroke-width="1"/></svg>`;
   const box = !shipMoving(s) && bearing == null || s.category === "beacon" ? size * 0.6 : size;
-  return L.divIcon({ className: "ship", iconSize: [box, box], iconAnchor: [box / 2, box / 2], html });
+  const ring = { emergency: " ring-emergency", notable: " ring-interesting" }[s.interest?.level] || "";
+  return L.divIcon({ className: `ship${ring}`, iconSize: [box, box], iconAnchor: [box / 2, box / 2], html });
 }
 
 // Where the ship is probably now: its last report moved on by its speed and course.
@@ -1782,7 +1874,7 @@ function drawShips() {
     const at = shipPosition(s);
     if (!view.contains(at)) continue;
     seen.add(s.mmsi);
-    const key = `${s.category}|${shipSize(s)}|${shipMoving(s)}|${Math.round((shipBearing(s) ?? -5) / 5)}`;
+    const key = `${s.category}|${shipSize(s)}|${shipMoving(s)}|${Math.round((shipBearing(s) ?? -5) / 5)}|${s.interest?.level}`;
     let m = shipMarkers.get(s.mmsi);
     if (!m) {
       m = L.marker(at, { icon: shipIcon(s), zIndexOffset: 300 }).addTo(shipLayer);
@@ -1823,43 +1915,84 @@ function shipSizeText(s) {
 function renderShipTable(snapshot) {
   const st = snapshot.status || {};
   document.getElementById("ships-count").textContent = latestShips.length;
-  const title = st.ok === false ? st.error || "Not connected"
-    : `Live from aisstream.io: ${st.shown ?? 0} shown of ${st.tracked ?? 0} vessels in range`;
+  const feedText = Object.entries(st.feeds || {}).map(([name, f]) => `${SHIP_FEEDS[name] || name}: ${
+    f.error ? f.error : f.ok ? `${f.messages} messages` : f.connected ? "listening, nothing heard yet" : "connecting"}`);
+  const title = [`${st.shown ?? 0} shown of ${st.tracked ?? 0} vessels in range`, ...feedText].join("\n");
   document.getElementById("ships-status").innerHTML =
     `<span class="dot ${st.ok ? "ok" : st.ok === false ? "err" : ""}" title="${esc(title)}"></span>`;
   document.getElementById("ship-nearby").innerHTML = latestShips.length
     ? latestShips.slice(0, 300).map((s) => `<tr data-ship="${s.mmsi}">
         <td class="icon"><span class="ship-dot" style="background: ${SHIP_COLOURS[s.category] || SHIP_COLOURS.unknown}"></span></td>
-        <td><b>${esc(shipName(s))}</b><small>${esc(shipType(s))}</small></td>
+        <td><b>${esc(shipName(s))}</b>${shipBadge(s)}<small>${esc(s.interest?.level === "notable" ? s.interest.reason : shipType(s))}</small></td>
         <td>${flagEmoji(s.flag)} ${esc(flagName(s.flag) || "—")}</td>
         <td>${esc(shipStatus(s))}</td>
-        <td>${esc(s.destination || "—")}${s.eta ? `<small>due ${esc(shipDate(s.eta))}</small>` : ""}</td>
+        <td title="${esc(s.destination || "")}">${esc(shipDestination(s) || "—")}${s.eta ? `<small>due ${esc(shipDate(s.eta))}</small>` : ""}</td>
         <td>${esc(shipSizeText(s) || "—")}</td>
-        <td class="num">${fmtDist(s.distance_km)} ${esc(s.direction || "")}</td></tr>`).join("")
+        <td class="num">${s.source === "receiver" ? '<span title="Heard by your own receiver">📡</span> ' : ""}${fmtDist(s.distance_km)} ${esc(s.direction || "")}</td></tr>`).join("")
     : `<tr class="empty"><td colspan="7">${st.ok === false ? `No ship data: ${esc(st.error || "error")}` : "Waiting for ships… (positions arrive every few minutes)"}</td></tr>`;
   applyFilter();
+  renderInterestingShips();
+}
+
+// Side panel: interesting ships in range, emergencies first.
+function renderInterestingShips() {
+  const ORDER = { emergency: 0, notable: 1, military: 2 };
+  const list = latestShips.filter((s) => s.interest).sort((x, y) =>
+    ORDER[x.interest.level] - ORDER[y.interest.level] || x.distance_km - y.distance_km);
+  document.getElementById("interesting-ships-count").textContent = list.length;
+  document.getElementById("interesting-ships").innerHTML = list.length
+    ? list.slice(0, 10).map((s) => `<li data-ship="${s.mmsi}" class="interest-${s.interest.level}">
+        <div class="row"><span class="callsign"><span class="ship-dot" style="background: ${SHIP_COLOURS[s.category] || SHIP_COLOURS.unknown}"></span>
+          ${esc(shipName(s))}${shipBadge(s)}</span><span>${esc(shipStatus(s))}</span></div>
+        <div class="row meta"><span>${esc(s.interest.level === "military" ? shipType(s) : s.interest.reason)}${shipDestination(s) ? ` · ${esc(shipDestination(s))}` : ""}</span>
+          <span>${fmtDist(s.distance_km)} ${esc(s.direction || "")}</span></div></li>`).join("")
+      + (list.length > 10 ? `<li class="empty">and ${list.length - 10} more (see the Ships tab)</li>` : "")
+    : '<li class="empty">Nothing unusual in range</li>';
+}
+
+// "First time here", or "3rd visit · last here 2 Nov".
+function shipVisits(s) {
+  const h = s.history;
+  if (!h) return null;
+  if (h.visits <= 1) return "First time seen here";
+  const n = h.visits, suffix = n % 100 >= 11 && n % 100 <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th";
+  const last = h.previous ? new Date(h.previous * 1000).toLocaleDateString([], { day: "numeric", month: "short" }) : null;
+  return `${n}${suffix} visit${last ? ` · last here ${last}` : ""}`;
+}
+
+function onShipAlert(s) {
+  const emergency = s.interest.level === "emergency";
+  const where = `${fmtDist(s.distance_km)} ${s.direction || ""}`.trim();
+  const going = shipDestination(s) ? `, bound for ${shipDestination(s)}` : "";
+  const text = `${emergency ? "🚨" : "🚢"} ${shipName(s)}: ${s.interest.reason}${going}, ${where}`;
+  toast(text, emergency ? "emergency" : "interesting");
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(emergency ? "Emergency beacon at sea" : "Interesting ship", { body: text });
+  }
 }
 
 function shipPopup(s) {
   const flagText = s.flag ? `${flagEmoji(s.flag)} ${flagName(s.flag)}` : null;
   const ago = observedText(s.reported);
   const rows = [
+    ["Interesting", s.interest && s.interest.level !== "military" ? s.interest.reason : null],
     ["Type", shipType(s)], ["Flag", flagText], ["Status", shipStatus(s)],
     ["Heading", s.heading != null ? `${s.heading}°` : null],
-    ["Destination", s.destination], ["Due", shipDate(s.eta)],
+    ["Destination", shipDestination(s)], ["Given as", s.route ? s.destination : null], ["Due", shipDate(s.eta)],
     ["Size", shipSizeText(s)], ["Draught", s.draught_m ? `${s.draught_m} m` : null],
     ["MMSI", String(s.mmsi)], ["IMO", s.imo ? String(s.imo) : null], ["Call sign", s.callsign],
     ["From home", `${fmtDist(s.distance_km)} ${s.direction || ""}`],
-    ["Reported", ago && `${ago}${s.ais_class === "B" ? " (small-boat transponder)" : ""}`],
+    ["Reported", ago && `${ago}${s.source === "receiver" ? " by your receiver 📡" : ""}${s.ais_class === "B" ? " (small-boat transponder)" : ""}`],
+    ["Seen here", shipVisits(s)],
   ].filter(([, v]) => v);
   const trail = shipTrail?.mmsi === s.mmsi && shipTrail.points.length > 1
     ? '<div class="meta">Its last half hour is drawn on the map.</div>' : "";
-  return `<div class="title"><b>🚢 ${esc(shipName(s))}</b></div>
+  return `<div class="title"><b>🚢 ${esc(shipName(s))}</b>${shipBadge(s)}</div>
     <table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join("")}</table>
     ${trail}
     <div class="meta"><a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${s.mmsi}" target="_blank" rel="noopener">MarineTraffic</a> ·
       <a href="https://www.vesselfinder.com/vessels/details/${s.mmsi}" target="_blank" rel="noopener">VesselFinder</a></div>
-    <div class="credit">AIS data from aisstream.io · positions every few minutes, moved on between reports</div>`;
+    <div class="credit">${s.source === "receiver" ? "Heard by your own AIS receiver" : "AIS data from aisstream.io · positions every few minutes, moved on between reports"}</div>`;
 }
 
 async function loadShipTrail(mmsi) {
@@ -1903,6 +2036,10 @@ function renderShips(snapshot) {
   drawShipTrail();
 }
 
+document.getElementById("interesting-ships").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-ship]");
+  if (row) select("ship", Number(row.dataset.ship));
+});
 document.getElementById("ship-nearby").addEventListener("click", (e) => {
   const row = e.target.closest("[data-ship]");
   if (row) select("ship", Number(row.dataset.ship));
@@ -1927,6 +2064,7 @@ function connect() {
       renderSources(msg.sources);
       if (msg.buses) renderBuses(msg.buses);
       if (msg.roads) renderRoads(msg.roads);
+      if (msg.rail) renderRail(msg.rail);
       if (msg.ships) renderShips(msg.ships);
       if (msg.trains) {
         renderTrains(msg.trains);
@@ -1939,6 +2077,10 @@ function connect() {
       onAlert(msg.aircraft);
     } else if (msg.type === "interest_alert") {
       onInterestAlert(msg.aircraft);
+    } else if (msg.type === "rail_alert") {
+      onRailAlert(msg.incident);
+    } else if (msg.type === "ship_alert") {
+      onShipAlert(msg.ship);
     } else if (msg.type === "train_alert") {
       onTrainAlert(msg.train);
     }
@@ -2028,8 +2170,10 @@ async function init() {
     document.getElementById("buses-group").hidden = false;
   }
   if (cfg.roads?.enabled) document.getElementById("roads-group").hidden = false;
+  if (cfg.rail?.enabled) document.getElementById("rail-group").hidden = false;
   if (cfg.ships?.enabled) {
     document.querySelector('[data-tab="ships-tab"]').hidden = false;
+    document.getElementById("ships-group").hidden = false;
     // The live feed sends ships every few seconds; don't wait for it.
     getJSON("/api/ships").then(renderShips).catch(console.warn);
   }

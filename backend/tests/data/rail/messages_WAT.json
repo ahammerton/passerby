@@ -1,0 +1,15 @@
+[
+ {
+  "crsCode": "WAT",
+  "creationTime": "2026-11-17T11:01:45.5877675+00:00",
+  "stationDisruptions": [
+   {
+    "category": "Train service",
+    "severity": "Minor",
+    "summary": "Trains running through the Brockenhurst area may be cancelled, delayed by up to 30 minutes or revised. Latest information can be found in the Disruptions area of the <a href=\"https://www.nationalrail.co.uk/service-disruptions/brockenhurst-20261117/\">National Rail website.</a>",
+    "description": "P2 #Brockenhurst"
+   }
+  ],
+  "stationAlerts": "<p>London Waterloo station is not open 24 hours, opening hours are detailed below, the station is closed overnight with no waiting facilities available.</p>"
+ }
+]

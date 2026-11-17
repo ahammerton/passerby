@@ -7,6 +7,8 @@ services:
     ports:
       # Set APP_BIND=127.0.0.1 in .env when using Caddy, so only HTTPS is reachable.
       - "${APP_BIND:-0.0.0.0}:8000:8000"
+      # Your own AIS receiver sending to Passerby (AIS_RECEIVER=udp://0.0.0.0:10110):
+      # - "10110:10110/udp"
     volumes:
       # History, caches, settings and logins. To keep them in a folder here instead, create it
       # owned by the app's user first (mkdir data && sudo chown 1000:1000 data) and use ./data:/data.

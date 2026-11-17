@@ -4,6 +4,8 @@ aisstream.io passes on a ship's position only every 2-3 minutes (sometimes 6-9),
 stay listed for a while after their last report, and the browser moves them on by their
 speed and course in between. Ship details (name, type, size) arrive every few minutes at
 best, so they're also kept on disk (ships.db): after a restart ships are known at once.
+ships.db also logs each visit (one row per ship per stay in range), so a ship can say how
+often it has been seen here before.
 """
 
 import sqlite3
@@ -13,6 +15,8 @@ from pathlib import Path
 
 from ..geo import bearing_deg, compass, haversine_km
 from . import ais
+from .interesting import assess
+from .ports import Ports
 
 # Seconds without a position report before a ship is dropped.
 EXPIRE_MOVING = 30 * 60
@@ -21,6 +25,9 @@ TRAIL_POINTS = 20
 TRAIL_SECONDS = 30 * 60
 TRAIL_MIN_KM = 0.05  # a new trail point once a ship has moved this far
 STILL_KT = 0.5
+# A ship back in range after longer than this is on a new visit. Long, because ships at
+# anchor or in port can go quiet for hours.
+VISIT_GAP_SECONDS = 6 * 3600
 
 DETAIL_KEYS = ("name", "callsign", "imo", "type_code", "length_m", "beam_m", "draught_m", "destination", "eta")
 
@@ -31,6 +38,15 @@ CREATE TABLE IF NOT EXISTS ships (
     length_m REAL, beam_m REAL, draught_m REAL, destination TEXT, eta REAL,
     updated REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS visits (
+    id INTEGER PRIMARY KEY,
+    mmsi INTEGER NOT NULL,
+    first_seen REAL NOT NULL,
+    last_seen REAL NOT NULL,
+    closest_km REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visits_mmsi ON visits (mmsi, last_seen);
+CREATE INDEX IF NOT EXISTS visits_last ON visits (last_seen);
 """
 
 
@@ -56,6 +72,44 @@ class ShipDetails:
                 f" VALUES (?, {', '.join('?' * len(DETAIL_KEYS))}, ?)",
                 [(mmsi, *(d.get(k) for k in DETAIL_KEYS), now) for mmsi, d in details.items()])
 
+    def record_visits(self, positions: dict[int, dict], now: float | None = None) -> None:
+        """Log the ships in range now: extend each one's latest visit, or start a new one."""
+        now = time.time() if now is None else now
+        with self._lock, self.db:
+            for mmsi, p in positions.items():
+                row = self.db.execute("SELECT id, last_seen FROM visits WHERE mmsi = ? ORDER BY last_seen DESC LIMIT 1",
+                                      (mmsi,)).fetchone()
+                if row and now - row[1] <= VISIT_GAP_SECONDS:
+                    self.db.execute("UPDATE visits SET last_seen = ?, closest_km = MIN(closest_km, ?) WHERE id = ?",
+                                    (now, p["distance_km"], row[0]))
+                else:
+                    self.db.execute("INSERT INTO visits (mmsi, first_seen, last_seen, closest_km) VALUES (?, ?, ?, ?)",
+                                    (mmsi, now, now, p["distance_km"]))
+
+    def visit_summary(self) -> dict[int, dict]:
+        """mmsi -> {visits, first_seen, previous}: how many visits, when it was first seen, and when
+        its visit before the latest one ended."""
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT mmsi, COUNT(*), MIN(first_seen),"
+                " (SELECT v2.last_seen FROM visits v2 WHERE v2.mmsi = v.mmsi ORDER BY v2.last_seen DESC LIMIT 1 OFFSET 1)"
+                " FROM visits v GROUP BY mmsi").fetchall()
+        return {m: {"visits": n, "first_seen": first, "previous": prev} for m, n, first, prev in rows}
+
+    def recent_visits(self, limit: int = 100) -> list[dict]:
+        with self._lock:
+            rows = self.db.execute(
+                "SELECT v.mmsi, v.first_seen, v.last_seen, v.closest_km, s.name, s.type_code, s.length_m"
+                " FROM visits v LEFT JOIN ships s USING (mmsi) ORDER BY v.last_seen DESC LIMIT ?", (limit,)).fetchall()
+        keys = ("mmsi", "first_seen", "last_seen", "closest_km", "name", "type_code", "length_m")
+        return [dict(zip(keys, r)) for r in rows]
+
+    def visit_stats(self, since: float) -> dict:
+        with self._lock:
+            visits, ships = self.db.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT mmsi) FROM visits WHERE last_seen >= ?", (since,)).fetchone()
+        return {"visits": visits, "ships": ships}
+
     def close(self) -> None:
         with self._lock:
             self.db.close()
@@ -63,7 +117,7 @@ class ShipDetails:
 
 class ShipTracker:
     def __init__(self, home_lat: float, home_lon: float, radius_km: float, show_leisure: bool = False,
-                 details: dict[int, dict] | None = None):
+                 details: dict[int, dict] | None = None, aisstream: bool = True):
         self.home = (home_lat, home_lon)
         self.radius_km = radius_km
         self.show_leisure = show_leisure
@@ -71,12 +125,18 @@ class ShipTracker:
         self.trails: dict[int, list[tuple[float, float, float]]] = {}
         self.details: dict[int, dict] = details or {}
         self.dirty: set[int] = set()  # details not yet saved to disk
+        self.ports = Ports()  # filled in once the code list has loaded
+        self.history: dict[int, dict] = {}  # mmsi -> visit summary, refreshed from ships.db
+        # Each feed's state: aisstream.io and your own receiver (when set up).
         self.status: dict = {"ok": None, "connected": False, "messages": 0, "last_message": None, "error": None}
+        self.aisstream = aisstream  # False when only your own receiver is in use
+        self.receiver_status: dict | None = None
 
-    def ingest(self, msg: dict, now: float | None = None) -> None:
+    def ingest(self, msg: dict, now: float | None = None, source: str = "aisstream") -> None:
         now = time.time() if now is None else now
-        self.status["messages"] += 1
-        self.status["last_message"] = now
+        if source == "aisstream":
+            self.status["messages"] += 1
+            self.status["last_message"] = now
         parsed = ais.parse(msg, now)
         if not parsed:
             return
@@ -87,7 +147,7 @@ class ShipTracker:
                 known.update(details)
                 self.dirty.add(mmsi)
         if position:
-            self._move(mmsi, position)
+            self._move(mmsi, position | {"source": source})
 
     def _move(self, mmsi: int, p: dict) -> None:
         distance = haversine_km(*self.home, p["lat"], p["lon"])
@@ -129,7 +189,7 @@ class ShipTracker:
         if beacon := ais.beacon(mmsi):
             category, type_name = "beacon", beacon
         bearing = bearing_deg(*self.home, p["lat"], p["lon"])
-        return {
+        ship = {
             "mmsi": mmsi, "name": d.get("name"), "callsign": d.get("callsign"), "imo": d.get("imo"),
             "flag": ais.flag(mmsi), "category": category, "type": type_name, "type_code": d.get("type_code"),
             "length_m": d.get("length_m"), "beam_m": d.get("beam_m"), "draught_m": d.get("draught_m"),
@@ -137,7 +197,12 @@ class ShipTracker:
             "lat": p["lat"], "lon": p["lon"], "speed_kt": p["speed_kt"], "course": p["course"],
             "heading": p["heading"], "status": p["status"], "still": p["still"], "ais_class": p["ais_class"],
             "reported": p["reported"], "distance_km": p["distance_km"], "direction": compass(bearing),
+            "source": p.get("source", "aisstream"),
         }
+        ship["route"] = self.ports.describe(ship["destination"], ship)
+        ship["interest"] = assess(ship)
+        ship["history"] = self.history.get(mmsi)
+        return ship
 
     def visible(self, ship: dict) -> bool:
         return self.show_leisure or ship["category"] not in ais.LEISURE | {"small"}
@@ -146,8 +211,15 @@ class ShipTracker:
         self.expire(now)
         ships = [s for s in (self.ship(m) for m in self.positions) if s and self.visible(s)]
         ships.sort(key=lambda s: s["distance_km"])
-        status = dict(self.status, tracked=len(self.positions), shown=len(ships))
-        return {"ships": ships, "status": status}
+        return {"ships": ships, "status": self.feed_status() | {"tracked": len(self.positions), "shown": len(ships)}}
+
+    def feed_status(self) -> dict:
+        """The feeds in use, and overall: ok if any feed is working, an error only if none is."""
+        feeds = {name: dict(s) for name, s in (("aisstream", self.aisstream and self.status), ("receiver", self.receiver_status)) if s}
+        oks = [s["ok"] for s in feeds.values()]
+        ok = True if True in oks else False if oks and all(o is False for o in oks) else None
+        errors = [s["error"] for s in feeds.values() if s.get("error")]
+        return {"ok": ok, "error": "; ".join(errors) or None, "feeds": feeds}
 
     def trail(self, mmsi: int) -> list[list[float]]:
         now = time.time()

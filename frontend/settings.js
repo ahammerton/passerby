@@ -64,8 +64,8 @@ async function loadStations() {
 }
 
 function render() {
-  for (const name of ["home_name", "home_lat", "home_lon", "distance_unit", "altitude_unit", "speed_unit", "aircraft_colours", "interesting_alerts",
-    "train_alert_seconds", "nrod_username", "opensky_client_id", "contact", "readsb_url", "online_feeds"]) {
+  for (const name of ["home_name", "home_lat", "home_lon", "distance_unit", "altitude_unit", "speed_unit", "aircraft_colours", "interesting_alerts", "ship_alerts",
+    "train_alert_seconds", "ais_receiver", "nrod_username", "opensky_client_id", "contact", "readsb_url", "online_feeds"]) {
     field(name).value = values[name] ?? "";
   }
   field("readsb_enabled").checked = !!values.readsb_enabled;
@@ -77,6 +77,7 @@ function render() {
   field("bus_disruptions").checked = !!values.bus_disruptions;
   field("bus_region").value = values.bus_region || "auto";
   field("roads_enabled").checked = !!values.roads_enabled;
+  field("rail_disruptions_enabled").checked = !!values.rail_disruptions_enabled;
   field("ships_enabled").checked = !!values.ships_enabled;
   field("ships_show_leisure").checked = !!values.ships_show_leisure;
   // Secrets: never filled in; just say whether one is saved.
@@ -96,7 +97,7 @@ function render() {
   document.getElementById("trains-off").hidden = loaded.trains_available;
   document.getElementById("buses-off").hidden = loaded.secrets.bods_api_key;
   document.getElementById("roads-off").hidden = loaded.secrets.national_highways_api_key;
-  document.getElementById("ships-off").hidden = loaded.secrets.aisstream_api_key;
+  document.getElementById("ships-off").hidden = loaded.secrets.aisstream_api_key || !!values.ais_receiver;
   renderBackup();
   placeMarker();
   loadStations().catch((e) => console.warn("stations", e));
@@ -296,10 +297,13 @@ function collect() {
     bus_disruptions: field("bus_disruptions").checked,
     bus_region: field("bus_region").value,
     roads_enabled: field("roads_enabled").checked,
+    rail_disruptions_enabled: field("rail_disruptions_enabled").checked,
     road_radius_km: round(values.road_radius_km, 2),
     ships_enabled: field("ships_enabled").checked,
     ship_radius_km: round(values.ship_radius_km, 2),
     ships_show_leisure: field("ships_show_leisure").checked,
+    ship_alerts: field("ship_alerts").value,
+    ais_receiver: field("ais_receiver").value.trim(),
     readsb_enabled: field("readsb_enabled").checked,
     readsb_url: field("readsb_url").value.trim(),
     online_feeds: field("online_feeds").value,

@@ -106,6 +106,18 @@
           </section>
         </div>
 
+        <div id="rail-group" class="group" hidden>
+          <button type="button" class="group-head">🚆 Rail disruptions</button>
+          <section>
+            <h2>Train companies</h2>
+            <ul id="rail-operators" class="list"><li class="empty">Loading…</li></ul>
+          </section>
+          <section>
+            <h2>At your stations <span id="rail-count" class="count">0</span> <span id="rail-status"></span> <span id="rail-stations" class="meta"></span></h2>
+            <ul id="rail-incidents" class="list"><li class="empty">Loading…</li></ul>
+          </section>
+        </div>
+
         <div id="buses-group" class="group" hidden>
           <button type="button" class="group-head">🚌 Buses</button>
           <section>
@@ -115,6 +127,14 @@
           <section id="disruptions-section" hidden>
             <h2>Disruptions <span id="disruptions-count" class="count">0</span></h2>
             <ul id="disruptions" class="list"><li class="empty">Loading…</li></ul>
+          </section>
+        </div>
+
+        <div id="ships-group" class="group" hidden>
+          <button type="button" class="group-head">🚢 Ships</button>
+          <section>
+            <h2>Interesting now <span id="interesting-ships-count" class="count">0</span></h2>
+            <ul id="interesting-ships" class="list"><li class="empty">Waiting for ships…</li></ul>
           </section>
         </div>
 

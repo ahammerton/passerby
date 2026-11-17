@@ -12,6 +12,18 @@ and versions follow [Semantic Versioning](https://semver.org/).
   that point the way each ship faces, a Ships tab with flag, status, destination and size, and details
   with the ship's recent track. Ships are moved on between reports, small boats are hidden unless turned
   on, and ship details are kept in `data/ships.db`.
+- **Interesting ships**: cruise ships, warships, giant ships (300 m or longer), a few famous ships and
+  emergency beacons get a ring on the map, a badge and a place in the side panel, with alerts (all,
+  emergencies only, or none) when one is under way.
+- **Port names** for ship destinations given as UN/LOCODEs: `BEANR>GBDAG` reads "Antwerpen → Dagenham".
+- **Ship history**: visits are logged, so a ship says how often it has been seen here, and `/api/ships/history`
+  lists recent visits. The Today panel counts vessels.
+- **Rail disruptions** (optional; free Rail Data Marketplace key): incidents and engineering works at your
+  stations with National Rail's advice, each train company's status, station notices on the departure
+  boards, and an alert when a new disruption starts. Works with or without live trains.
+- **Your own AIS receiver** (optional): standard NMEA from AIS-catcher or similar, over UDP
+  (`AIS_RECEIVER=udp://0.0.0.0:10110`) or TCP (`tcp://host:port`), alongside aisstream.io or without it.
+  Ships it hears are marked 📡.
 
 ### Changed
 

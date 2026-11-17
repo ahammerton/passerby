@@ -42,9 +42,10 @@ train is about to pass, and keeps a history of what it has seen.
 - **Data sources**: [adsb.lol](https://adsb.lol) (unfiltered, including military), the [OpenSky Network](https://opensky-network.org), and/or your own ADS-B receiver (readsb/tar1090)
 - **Aircraft details**: type, operator, and scheduled origin/destination from [adsbdb](https://www.adsbdb.com), plus a photo from [planespotters.net](https://www.planespotters.net)
 - **UK trains** (optional): every train moving near you, freight included, live from [Network Rail's open data feeds](https://publicdatafeeds.networkrail.co.uk/ntrod/), with destinations, operators, calling points, departure boards, and alerts for trains passing your home
+- **Rail disruptions** (optional, Great Britain): incidents and engineering works at your stations, each train company's status, and station notices, from National Rail's Disruptions API
 - **Buses** (optional, England): live positions from the DfT's [Bus Open Data Service](https://www.gov.uk/guidance/find-and-use-bus-open-data), shown when the map is zoomed in
 - **Roads** (optional, England): closures and incidents on motorways and major A roads from National Highways
-- **Ships** (optional, anywhere with coverage): live AIS positions from [aisstream.io](https://aisstream.io), with names, types, flags, sizes and destinations
+- **Ships** (optional, anywhere with coverage): live AIS positions from [aisstream.io](https://aisstream.io), with names, types, flags, sizes and destinations (with port names), alerts for cruise ships, warships, giant ships and emergency beacons, and how often each ship has been seen
 - **Rain radar** from [RainViewer](https://www.rainviewer.com)
 - **Context**: nearby airports (OpenFlights) and METAR weather (aviationweather.gov)
 - **History**: every sighting is logged to SQLite (`data/sightings.db`)
@@ -94,11 +95,12 @@ tab. A tab can be linked to directly, e.g. `/settings.html#buses`.
   reads the file OpenSky gives you, in your browser, and fills in both fields;
   Save then checks it with OpenSky); the planespotters photo contact.
 - **🚆 Trains:** train radius, departure boards, the "trains past home"
-  stations, alert timing, and your Network Rail login.
+  stations, alert timing, your Network Rail login, and rail disruptions
+  (on/off and the Rail Data Marketplace key).
 - **🚌 Buses:** on/off, radius, zoom level, delays, disruptions, timetable
   region, and the BODS API key.
 - **🚧 Roads:** on/off, radius, and the National Highways API key.
-- **🚢 Ships:** on/off, radius, small boats on/off, and the aisstream.io API key.
+- **🚢 Ships:** on/off, radius, small boats on/off, ship alerts, the aisstream.io API key, and your own AIS receiver.
 
 If a value is rejected when saving, its tab opens with the reason.
 
@@ -291,6 +293,36 @@ OpenStreetMap contributors (ODbL). Train data:
 "Contains information of Network Rail Infrastructure Limited licensed under
 the following licence" (the Network Rail data feeds licence).
 
+## Rail disruptions
+
+Incidents and engineering works affecting your stations, from National Rail's
+**Disruptions API**. It works with or without the live trains above.
+
+**Setup:** register free at the [Rail Data Marketplace](https://raildata.org.uk),
+subscribe to **NationalRail Disruptions API** (Rail Delivery Group), and enter
+its API key on the settings page's **🚆 Trains** tab (or
+`RAIL_DISRUPTIONS_API_KEY` in `.env`). It's checked before it's saved.
+
+- **Which stations:** the two "trains past home" stations and your departure
+  boards (or, with neither set, the station nearest home), up to six.
+- **🚆 Rail disruptions** (Now tab):
+  - **Train companies:** the status of each company calling at those stations
+    (from the timetable when trains are on, else the companies named in the
+    disruptions): "✓ Good service" or what's wrong.
+  - **At your stations:** each disruption (⚠ unplanned first, then 🛠
+    engineering works) with when and which companies. Click one for National
+    Rail's full advice (ticket acceptance, alternatives) and a link to its page.
+- **Departure boards** show the notice displayed at the station, such as
+  "Trains between Gatwick and Redhill may be delayed by up to 20 minutes".
+- **Alerts:** a pop-up (and browser notification, if allowed) when a new
+  unplanned disruption affects your stations. Nothing is repeated after a
+  restart.
+- **Updates every 5 minutes:** two requests per station plus one for the
+  companies' status (about 1,400 a day for two stations).
+
+Disruptions data: National Rail Enquiries (Rail Delivery Group), via the
+Rail Data Marketplace.
+
 ## Buses (England)
 
 Live bus positions from the Department for Transport's
@@ -408,7 +440,7 @@ Coverage is good along most busy coasts and rivers, and patchy elsewhere.
 **Setup:** sign in to [aisstream.io](https://aisstream.io/account) with a GitHub
 account (free), create an API key, and enter it on the settings page's
 **🚢 Ships** tab (or `AISSTREAM_API_KEY` in `.env`). It's checked before it's
-saved. Ships stay off until there's a key.
+saved. Ships stay off until there's a key (or your own receiver, below).
 
 - **Map (🚢 Ships layer):** a hull pointing the way each ship faces, coloured
   by type: green cargo, red tankers, blue passenger ships, yellow high-speed
@@ -419,6 +451,23 @@ saved. Ships stay off until there's a key.
   ETA, size and distance, nearest first. Click one for its details and the
   track of its last half hour; the details link to MarineTraffic and
   VesselFinder.
+- **Destinations as port names:** ships are meant to give their destination
+  as a UN/LOCODE (`GBSOU` is Southampton), sometimes as a route
+  (`BEANR>GBDAG` becomes "Antwerpen → Dagenham", `<>` a round trip ⇄). Names
+  typed in full are shown as they are. The code list (about 30,000 ports) is
+  downloaded once and kept in `data/ports.json.gz`, refreshed every 90 days.
+- **Interesting ships** get a gold ring on the map, a ✨ badge, and a place
+  in the side panel's **🚢 Ships** group: cruise ships (passenger ships 200 m
+  or longer), warships 60 m or longer, any ship 300 m or longer, and a few
+  famous ships by name. Emergency beacons (AIS-SART, man overboard, EPIRB)
+  get a pulsing red ring. Smaller military craft are listed but not marked.
+- **Ship alerts:** a pop-up (and a browser notification, if allowed) for an
+  emergency beacon as soon as it's seen, and for an interesting ship when it's
+  under way, at most once a day each: a cruise ship at its berth all day
+  isn't news, one sailing past is. Choose all, emergencies only, or none.
+- **History:** each ship's visits are logged in `data/ships.db`, so its
+  details say "First time seen here" or "3rd visit · last here 2 Nov", and
+  the **📊 Today** panel counts the vessels seen in the last 24 hours.
 - **Positions every few minutes:** aisstream.io passes on a ship's position
   about every 2–3 minutes (sometimes less often), so the map moves each ship
   on by its speed and course in between. A ship is dropped after 30 minutes
@@ -430,7 +479,21 @@ saved. Ships stay off until there's a key.
   say what they are, are hidden unless you turn them on: around marinas they
   outnumber everything else.
 - **Settings:** on/off, the ship radius (default 100 km: inland, the nearest
-  coast or big river may be some way off) and small boats.
+  coast or big river may be some way off), small boats and ship alerts.
+- **Your own receiver** (optional): near the coast or a big river, an RTL-SDR
+  dongle and a marine VHF antenna running
+  [AIS-catcher](https://github.com/jvde-github/AIS-catcher) hear ships
+  directly, every few seconds instead of every few minutes. Set its address
+  on the settings page (or `AIS_RECEIVER` in `.env`). It works alongside
+  aisstream.io, or on its own without a key:
+  - `udp://0.0.0.0:10110`: Passerby listens, and the receiver sends to it:
+    `AIS-catcher -u <Passerby's address> 10110`. In Docker, uncomment the
+    `10110:10110/udp` port in `docker-compose.yml`.
+  - `tcp://192.168.1.50:5012`: Passerby connects to the receiver, which
+    serves NMEA: `AIS-catcher -S 5012`. Nothing to open in Docker.
+
+  Anything that sends standard `!AIVDM` NMEA sentences works (rtl-ais, dAISy,
+  chart plotters). Ships your receiver hears are marked 📡.
 - **Limits:** one connection, compressed, covering a box around the ship
   radius. aisstream.io offers no uptime guarantee and keeps no history; if
   the connection drops, the app reconnects with a growing wait.
@@ -536,8 +599,10 @@ outside.
 | `GET /api/buses` | Buses within the bus radius, with feed status and nearby disruptions |
 | `GET /api/buses/route?id=` | The route a bus is running: road path or stops joined, and every stop |
 | `GET /api/radar` | Rain radar frames (RainViewer tile addresses) |
+| `GET /api/rail/disruptions` | Rail disruptions at your stations: incidents, station notices, train company status |
 | `GET /api/roads` | Road closures and incidents near home (National Highways) |
 | `GET /api/ships` | Ships within the ship radius, nearest first, with feed status |
+| `GET /api/ships/history?limit=100` | Recent ship visits, newest first |
 | `GET /api/ships/{mmsi}` | One ship, with the track of its last half hour |
 | `GET /api/railways` | Railway track lines around home (OpenStreetMap) |
 | `GET /api/station/{crs}` | One station: platform layout, trains there with platforms, departures |
@@ -548,8 +613,8 @@ outside.
 | `GET /api/session`, `POST /api/login`, `POST /api/logout` | Admin sign-in when `ADMIN_PASSWORD` is set |
 | `GET /api/stations?lat=&lon=&radius_km=` | Stations near a point |
 | `GET /api/history?limit=100&overhead_only=true` | Logged sightings |
-| `GET /api/stats` | Counts for the last 24h and 7 days |
-| `WS /ws` | `snapshot` messages every 2s (with `trains`, `buses` and `roads` when enabled, and `ships` every 10s), plus `alert` / `train_alert` messages |
+| `GET /api/stats` | Counts for the last 24h and 7 days (with ship visits when ships are on) |
+| `WS /ws` | `snapshot` messages every 2s (with `trains`, `buses` and `roads` when enabled, and `ships` every 10s), plus `alert` / `interest_alert` / `train_alert` / `rail_alert` / `ship_alert` messages |
 
 ## Development
 
@@ -574,7 +639,7 @@ backend/app/
   enrichment.py   adsbdb details and routes, planespotters photos, SQLite cache
   airlines.py     Airline from the callsign, its map colours, and logos
   interesting.py  Emergencies, notable and rare types, and their alerts
-  ships/          aisstream.io connection, AIS message decoding, ship tracking and flags
+  ships/          aisstream.io and own-receiver (NMEA) feeds, AIS decoding, tracking, port names, interesting ships
   trains/         Network Rail TRUST and SCHEDULE feeds, CORPUS, stations, OSM railway lines, positions, boards
   store.py        SQLite sighting history
   airports.py     OpenFlights airport data
@@ -588,10 +653,8 @@ in `main.py`.
 
 ## Ideas for next steps
 
-- Interesting ships: cruise liners, warships, very large ships and distress beacons, with alerts
 - Send alerts to your phone via ntfy or Home Assistant
 - Add a history page with charts built from `/api/history`
-- Ships from your own AIS receiver (AIS-catcher), for coastal homes
 
 ## Third-party data and services
 
@@ -612,8 +675,10 @@ redistribute it. Each has its own terms, and some need you to register:
 | Trains | [Network Rail open data feeds](https://publicdatafeeds.networkrail.co.uk/ntrod/) | "Contains information of Network Rail Infrastructure Limited licensed under the following licence" (the Network Rail data feeds licence) |
 | Railway stations | [uk-railway-stations](https://github.com/davwheat/uk-railway-stations) | © David Wheatley, Trainline EU and contributors, ODbL |
 | Buses | [Bus Open Data Service](https://www.gov.uk/guidance/find-and-use-bus-open-data) (DfT) | Open Government Licence |
+| Rail disruptions | [NationalRail Disruptions API](https://raildata.org.uk) (Rail Delivery Group, via the Rail Data Marketplace) | Free, with your own key; open licence |
 | Roads | [National Highways](https://developer.data.nationalhighways.co.uk/) | Open Government Licence |
 | Ships | [aisstream.io](https://aisstream.io) | Free API, with your own key; no published terms of use |
+| Port names | [UN/LOCODE](https://unece.org/trade/uncefact/unlocode) (UNECE), via [datasets/un-locode](https://github.com/datasets/un-locode) | Published free by the UN |
 
 The airline colours are hand-picked approximations for a small map icon, not
 official livery specifications.

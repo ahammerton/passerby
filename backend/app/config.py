@@ -111,6 +111,12 @@ class Settings(BaseSettings):
     bus_region: Literal["auto", "south_east", "london", "south_west", "east_anglia", "east_midlands",
                         "west_midlands", "north_west", "north_east", "yorkshire"] = "auto"
 
+    # Rail disruptions (incidents, engineering works, station messages, train company status) at
+    # your stations, from National Rail's Disruptions API. Free key: subscribe to "NationalRail
+    # Disruptions API" at https://raildata.org.uk; off until it's set.
+    rail_disruptions_api_key: str = ""
+    rail_disruptions_enabled: bool = True
+
     # Road closures and incidents on motorways and major A-roads, from National Highways.
     # Free key: https://developer.data.nationalhighways.co.uk ("Road & Lane Closures");
     # roads stay off until it's set.
@@ -127,6 +133,12 @@ class Settings(BaseSettings):
     ship_radius_km: float = 100.0
     # Sailing boats, pleasure craft and small boats that don't say what they are.
     ships_show_leisure: bool = False
+    # Alerts for interesting ships: "all" (emergency beacons, and cruise ships, warships and
+    # giant ships under way), "emergencies" (beacons only) or "off".
+    ship_alerts: Literal["all", "emergencies", "off"] = "all"
+    # Your own AIS receiver sending NMEA (e.g. AIS-catcher), alongside aisstream.io or instead of it:
+    # udp://0.0.0.0:10110 to listen for it, or tcp://192.168.1.50:5012 to connect to it.
+    ais_receiver: str = ""
 
     # METAR weather for nearby airports from aviationweather.gov.
     weather_interval: int = 600
@@ -173,12 +185,16 @@ class Settings(BaseSettings):
         return self.buses_enabled and bool(self.bods_api_key)
 
     @property
+    def rail_disruptions_available(self) -> bool:
+        return self.rail_disruptions_enabled and bool(self.rail_disruptions_api_key)
+
+    @property
     def roads_available(self) -> bool:
         return self.roads_enabled and bool(self.national_highways_api_key)
 
     @property
     def ships_available(self) -> bool:
-        return self.ships_enabled and bool(self.aisstream_api_key)
+        return self.ships_enabled and bool(self.aisstream_api_key or self.ais_receiver)
 
     @property
     def photos_available(self) -> bool:

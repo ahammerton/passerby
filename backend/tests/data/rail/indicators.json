@@ -1,0 +1,145 @@
+[
+ {
+  "tocCode": "GW",
+  "tocName": "Great Western Railway",
+  "tocStatus": "Custom",
+  "tocStatusImage": "icon-note-noshadow.png",
+  "tocStatusDescription": "Disruption between Reading and London Paddington",
+  "tocServiceGroup": [
+   {
+    "currentDisruption": "E3A6FA7E168442559141052D09F6334C",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/gloucester-20260305/"
+   },
+   {
+    "currentDisruption": "5CA8C49C67714377A00C0C0B67D3654E",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/pangbourne-20260810/"
+   },
+   {
+    "currentDisruption": "40BE61B52A8245F88A0C6CAE8834F576",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/severn-beach-20260909/"
+   },
+   {
+    "currentDisruption": "951C772A71C941A1801F03A818483511",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/heathrow-terminals-20261117/"
+   },
+   {
+    "currentDisruption": "8FAEC9BADFF945EDA21EC85B90DA4333",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/redhill-20261117/"
+   }
+  ],
+  "tocTwitterAccount": "GWRHelp",
+  "tocAdditionalInfo": "Latest travel news"
+ },
+ {
+  "tocCode": "SE",
+  "tocName": "Southeastern",
+  "tocStatus": "Good service",
+  "tocStatusImage": "icon-tick2.png",
+  "tocStatusDescription": "Good service",
+  "tocTwitterAccount": "Se_Railway",
+  "tocAdditionalInfo": "Latest travel news"
+ },
+ {
+  "tocCode": "SN",
+  "tocName": "Southern",
+  "tocStatus": "Custom",
+  "tocStatusImage": "icon-note-noshadow.png",
+  "tocStatusDescription": "Delays between Gatwick Airport and Redhill",
+  "tocServiceGroup": [
+   {
+    "currentDisruption": "8FAEC9BADFF945EDA21EC85B90DA4333",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/redhill-20261117/"
+   }
+  ],
+  "tocTwitterAccount": "SouthernRailUK",
+  "tocAdditionalInfo": "Latest travel news"
+ },
+ {
+  "tocCode": "SW",
+  "tocName": "South Western Railway",
+  "tocStatus": "Custom",
+  "tocStatusImage": "icon-note-noshadow.png",
+  "tocStatusDescription": "Disruption in the Brockenhurst area",
+  "tocServiceGroup": [
+   {
+    "currentDisruption": "3FCC4A35B53C4FB3832CA46540701E7C",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/overton-20260327/"
+   },
+   {
+    "currentDisruption": "8554E19FAAFF4ADCBA1ADC00BC3E7C63",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/raynes-park-20260417/"
+   },
+   {
+    "currentDisruption": "24CEE3FF6572469087BED950A3560D4C",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/shawford-20260505/"
+   },
+   {
+    "currentDisruption": "68924DE82BF04C2699070F164C671BA6",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/vauxhall-20260605/"
+   },
+   {
+    "currentDisruption": "9B531E36A5B749998D9F85D061FDE22D",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/brockenhurst-20261117/"
+   },
+   {
+    "currentDisruption": "FF7C81B25A784EF6ADDF0195863D5FBD",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/bagshot-20261117/"
+   }
+  ],
+  "tocTwitterAccount": "SW_Help",
+  "tocAdditionalInfo": "Latest travel news"
+ },
+ {
+  "tocCode": "XC",
+  "tocName": "CrossCountry",
+  "tocStatus": "Custom",
+  "tocStatusImage": "icon-note-noshadow.png",
+  "tocStatusDescription": "Disruption in the Brockenhurst area",
+  "tocServiceGroup": [
+   {
+    "currentDisruption": "E3A6FA7E168442559141052D09F6334C",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/gloucester-20260305/"
+   },
+   {
+    "currentDisruption": "24CEE3FF6572469087BED950A3560D4C",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/shawford-20260505/"
+   },
+   {
+    "currentDisruption": "25527392B206464A99B9BEDEDFDE7685",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/birmingham-new-street-20260524/"
+   },
+   {
+    "currentDisruption": "5CA8C49C67714377A00C0C0B67D3654E",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/pangbourne-20260810/"
+   },
+   {
+    "currentDisruption": "ED565D8CD15248C6BFC6DF1FE17ADB72",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/stafford-20261103/"
+   },
+   {
+    "currentDisruption": "9B531E36A5B749998D9F85D061FDE22D",
+    "customDetail": "Read about this disruption",
+    "customURL": "https://www.nationalrail.co.uk/service-disruptions/brockenhurst-20261117/"
+   }
+  ],
+  "tocTwitterAccount": "crosscountryuk",
+  "tocAdditionalInfo": "Latest travel news"
+ }
+]
