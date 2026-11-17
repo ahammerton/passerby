@@ -6,6 +6,10 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The Docker image now runs on **Python 3.15** (was 3.12). The tests also run on 3.15.
+
 ## [0.2.1] - 2026-11-17
 
 ### Added
