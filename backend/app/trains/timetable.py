@@ -140,6 +140,7 @@ class Schedule:
         passenger = self.atoc not in (None, "ZZ")  # "ZZ" is freight and other non-passenger operators
         return {
             "operator": OPERATORS.get(self.atoc or "", self.atoc if passenger else None),
+            "operator_code": self.atoc if passenger else None,  # for the company's colour on the map
             "power": POWER_TYPES.get(self.power or ""),
             "planned_class": planned_class,
             "trailing_load_t": trailing_load,

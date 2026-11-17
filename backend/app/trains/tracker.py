@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
-from ..geo import haversine_km
+from ..geo import bearing_deg, haversine_km
 from .corpus import Location
 from .passes import HomeLine
 from .railways import RailNetwork, fraction_along, point_along
@@ -284,10 +284,14 @@ class TrainTracker:
             a, b = start[0], nxt
             track = self.track(a, b)
             lat, lon = point_along(track, f) if track else (a.lat + f * (b.lat - a.lat), a.lon + f * (b.lon - a.lon))
+            # Which way it's heading: along the track just here (or straight for the next station).
+            p, q = ((point_along(track, max(f - 0.02, 0.0)), point_along(track, min(f + 0.02, 1.0))) if track
+                    else ((a.lat, a.lon), (b.lat, b.lon)))
             return {
                 "state": "between",
                 "lat": lat,
                 "lon": lon,
+                "bearing": round(bearing_deg(*p, *q)) if p != q else None,
                 "on_track": track is not None,
                 "from": a.crs,
                 "to": b.crs,

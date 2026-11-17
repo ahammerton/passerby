@@ -100,6 +100,7 @@ def test_train_between_stations_is_interpolated():
     assert p["state"] == "between" and (p["from"], p["to"]) == ("GLD", "WPL")
     assert p["progress"] == pytest.approx(0.5)
     assert p["lat"] == pytest.approx((GLD.lat + WPL.lat) / 2)
+    assert p["bearing"] in (359, 0)  # Worplesdon is due north of Guildford
     assert p["headcode"] == "2G41" and p["kind"] == "Stopping passenger" and not p["freight"]
     assert p["next"] == "Worplesdon" and p["last_report"] == "Guildford"
 

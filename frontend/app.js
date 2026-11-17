@@ -834,7 +834,51 @@ function countdown(t) {
   return `in ${Math.round(s / 60)} min`;
 }
 
-const passengerIcon = L.divIcon({ className: "train", iconSize: [22, 22], iconAnchor: [11, 11], html: "🚆" });
+// Trains: a square badge (buses are round) in the train company's colour, with the headcode in
+// departure-board digits, an arrow for the way it's heading, and a tab for how late it's running.
+const TOC_COLOURS = {
+  SW: "#203a73", GW: "#0a493e", SN: "#4f8a2b", TL: "#c4007a", SE: "#0f6fb5", XR: "#6950a1", XC: "#a3195b",
+  GX: "#c8102e", HX: "#532e63", CH: "#0077b3", LO: "#d9601a", VT: "#004354", GN: "#00649e", LE: "#c8102e",
+  EM: "#713563", AW: "#c8102e", NT: "#262262", TP: "#0b5f8a", LM: "#d06200", GR: "#ce0e2d", CC: "#a8006f",
+  ME: "#e5b800", GC: "#30302f", HT: "#d1006f", LD: "#2b2a7a", ES: "#0a2a5e", CS: "#14403d", SR: "#1c2a5a",
+  IL: "#203a73",
+};
+const TRAIN_DEFAULT = "#4b5f8f"; // passenger trains not (yet) matched to the timetable
+const FREIGHT_COLOUR = "#374151";
+const trainColour = (t) => (t.freight ? FREIGHT_COLOUR : TOC_COLOURS[t.operator_code] || TRAIN_DEFAULT);
+
+// White text, or dark on light colours (Merseyrail yellow).
+function textOn(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? "#111" : "#fff";
+}
+
+// On time (or early): a green dot. A few minutes late: amber "+6". Ten or more: red "+18".
+function lateTab(t) {
+  if (t.freight || t.late_minutes == null) return "";
+  if (t.late_minutes <= 1) return '<span class="train-late ok" title="On time">●</span>';
+  return `<span class="train-late ${t.late_minutes >= 10 ? "bad" : "warn"}" title="${t.late_minutes} min late">+${t.late_minutes}</span>`;
+}
+
+function trainIcon(t) {
+  const colour = trainColour(t);
+  const arrow = t.bearing == null ? ""
+    : `<span class="train-dir" style="transform: rotate(${t.bearing}deg)">↑</span>`;
+  return L.divIcon({
+    className: "train", iconSize: null,
+    html: `<div class="train-badge" style="background: ${colour}; color: ${textOn(colour)}"><span class="train-main">${
+      t.freight ? "🚂" : "🚆"}<span class="train-code">${esc(t.headcode || "?")}</span>${arrow}</span>${lateTab(t)}</div>`,
+  });
+}
+
+const trainIconKey = (t) => `${trainColour(t)}|${t.headcode}|${t.bearing == null ? "" : Math.round(t.bearing / 10)}|${
+  t.freight || t.late_minutes == null ? "" : t.late_minutes <= 1 ? "ok" : t.late_minutes}`;
+
+function trainTooltip(t) {
+  const late = t.freight || t.late_minutes == null ? "" : t.late_minutes <= 1 ? " · on time" : ` · ${t.late_minutes} min late`;
+  const type = t.planned_class ? ` · Class ${t.planned_class}` : "";
+  return `${trainLabel(t)}${late}${type}`;
+}
 
 let homeLatLng = null;
 
@@ -918,8 +962,6 @@ function trainPopup(t) {
     </table>${callingPoints(t)}<div class="credit">Position estimated from Network Rail reports${t.state === "between" && !t.on_track ? " (straight line: no track data here)" : ""}</div>`;
 }
 
-const freightIcon = L.divIcon({ className: "train", iconSize: [22, 22], iconAnchor: [11, 11], html: "🚂" });
-
 function renderTrainPositions(positions) {
   const seen = new Set();
   for (const t of positions) {
@@ -927,15 +969,20 @@ function renderTrainPositions(positions) {
     let m = trainMarkers.get(t.uid);
     if (!m) {
       // Drawn above aircraft so nearby trains aren't hidden under passing planes.
-      m = L.marker([t.lat, t.lon], { icon: t.freight ? freightIcon : passengerIcon, zIndexOffset: 1000 })
+      m = L.marker([t.lat, t.lon], { icon: trainIcon(t), zIndexOffset: 1000 })
         .on("click", () => select("train", t.uid)).addTo(trainLayer);
+      m.iconKey = trainIconKey(t);
       trainMarkers.set(t.uid, m);
     } else {
       m.setLatLng([t.lat, t.lon]);
+      if (m.iconKey !== trainIconKey(t)) {
+        m.iconKey = trainIconKey(t);
+        m.setIcon(trainIcon(t));
+        if (isSelected("train", t.uid)) markSelected(); // the new element needs the highlight
+      }
     }
     trainData.set(t.uid, t);
-    const type = t.planned_class ? ` · Class ${t.planned_class}` : "";
-    m.bindTooltip(`${esc(trainLabel(t))}${esc(type)}`, { direction: "top" });
+    m.bindTooltip(esc(trainTooltip(t)), { direction: "top", offset: [0, -10] });
   }
   for (const [uid, m] of trainMarkers) {
     if (!seen.has(uid)) {
@@ -2149,6 +2196,7 @@ function addLayerControl(withTrains, withBuses, withRoads, withShips) {
 
 async function init() {
   const cfg = await getJSON("/api/config");
+  if (cfg.version) document.getElementById("app-version").textContent = `v${cfg.version}`;
   units = cfg.units || units;
   aircraftColours = cfg.aircraft_colours || aircraftColours;
   photosEnabled = cfg.photos;
@@ -2163,6 +2211,11 @@ async function init() {
     }
   };
   homeView();
+  // Zoomed out beyond the starting view, train badges drop the headcode so they stay small.
+  const defaultZoom = map.getZoom();
+  const compactTrains = () => map.getContainer().classList.toggle("trains-compact", map.getZoom() < defaultZoom);
+  map.on("zoomend", compactTrains);
+  compactTrains();
   new HomeControl({ onHome: homeView, title: `Back to ${cfg.home.name}` }).addTo(map);
   if (cfg.buses?.enabled) {
     busMinZoom = cfg.buses.min_zoom;

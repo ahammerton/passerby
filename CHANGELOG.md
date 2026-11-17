@@ -6,6 +6,20 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-17
+
+### Added
+
+- The **version** is shown after the Passerby name at the top of the page.
+
+### Changed
+
+- **Trains on the map** are square badges in the train company's colour (charcoal for freight), with the
+  headcode in departure-board digits, an arrow for the way it's heading along the track, and a tab for
+  how it's running: green on time, amber a few minutes late, red ten or more. Zoomed out beyond the
+  starting view, the headcode is left off so the badges stay small.
+- Dependencies: stomp.py 9.0.0 (the Network Rail feed; checked against the live feed), pytest 9.2.0.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added

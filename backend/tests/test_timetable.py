@@ -90,7 +90,7 @@ def test_parse_schedule_times_and_midnight():
 def test_runs_on_days_and_details():
     s = parse_schedule(json.loads(schedule(locations=WATERLOO_PORTSMOUTH))["JsonScheduleV1"])
     assert s.covers(THU) and not s.covers(date(2026, 10, 17))  # not on Saturdays
-    assert s.details() == {"operator": "South Western Railway", "power": "Electric unit", "planned_class": None,
+    assert s.details() == {"operator": "South Western Railway", "operator_code": "SW", "power": "Electric unit", "planned_class": None,
                            "trailing_load_t": None, "max_speed_mph": 100, "first_class": True,
                            "catering": "Trolley", "sleeper": False}
 

@@ -59,6 +59,7 @@ body.tracker { display: flex; flex-direction: column; overflow: hidden; }
 #panel .tabs { position: sticky; top: 0; z-index: 1; }
 
 h1 { margin: 0 0 6px; font-size: 18px; }
+.app-version { font-size: 11px; font-weight: 400; color: var(--muted); }
 
 /* Tabs (side panel and drawer). */
 .tabs {
@@ -194,7 +195,22 @@ h3 { margin: 12px 0 4px; font-size: 13px; }
 .radar-control button { border: none; background: none; color: var(--text); cursor: pointer; font-size: 13px; width: 26px; height: 26px; }
 .bus-selected .leaflet-marker-icon.bus { opacity: 0.35 !important; transition: opacity 0.2s; }
 .bus-selected .leaflet-marker-icon.bus.selected { opacity: 1 !important; }
-.train { font-size: 18px; line-height: 22px; text-align: center; filter: drop-shadow(0 0 2px #fff); }
+/* Trains: square badges (buses are round), the headcode in departure-board digits, a lateness tab. */
+.leaflet-marker-icon.train { background: none; border: none; }
+.train-badge {
+  display: flex; align-items: stretch; transform: translate(-50%, -50%); white-space: nowrap; overflow: hidden;
+  font: 700 11px/16px system-ui, sans-serif; border: 1.5px solid #fff; border-radius: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.train-main { display: flex; align-items: center; gap: 3px; padding: 0 4px 0 3px; }
+.train-main > :first-child { font-size: 12px; }
+.train-code { font: 700 11px/16px ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.04em; }
+.train-dir { display: inline-block; font-size: 11px; line-height: 1; opacity: 0.9; }
+.trains-compact .train-code { display: none; }
+.train-late { padding: 0 4px; border-left: 1px solid rgba(255, 255, 255, 0.6); font-size: 10px; }
+.train-late.ok { background: #fff; color: #16a34a; }
+.train-late.warn { background: #f59e0b; color: #111; }
+.train-late.bad { background: #dc2626; color: #fff; }
 .credit a { color: inherit; }
 .calls { margin: 6px 0; font-size: 12px; }
 .calls summary { cursor: pointer; color: var(--accent); }
@@ -309,7 +325,7 @@ h3 { margin: 12px 0 4px; font-size: 13px; }
 .ship svg { display: block; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.5)); }
 .ship.selected svg { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px var(--accent)); }
 .ship-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.5); }
-.train.selected { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px var(--accent)); }
+.train.selected .train-badge { box-shadow: 0 0 0 2px #fff, 0 0 8px 3px var(--accent); }
 
 #toasts { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 1000; display: grid; gap: 8px; }
 .toast {
