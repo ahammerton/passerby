@@ -6,6 +6,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
 ### Added
 
 - **Ships**, from AIS via aisstream.io (optional; free API key). A 🚢 Ships map layer with icons by type
