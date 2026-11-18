@@ -45,6 +45,26 @@ body.tracker { display: flex; flex-direction: column; overflow: hidden; }
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
 #topbar h1 { margin: 0; font-size: 17px; white-space: nowrap; }
+
+/* ☰ What to show: a menu of groups (aircraft, trains…). Switching one off hides it on the map
+   and in the tables and side panel (elements marked data-layer). */
+.layers-menu { position: relative; margin-right: -6px; }
+.menu-button {
+  font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  background: none; color: var(--text); border: 1px solid transparent;
+}
+.menu-button:hover, .menu-button[aria-expanded="true"] { background: var(--bg); border-color: var(--border); }
+.layers-list {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 1100; min-width: 190px;
+  padding: 6px 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.layers-list label { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.layers-list label:hover { background: var(--bg); }
+.layers-list input { accent-color: var(--accent); margin: 0; }
+body.off-aircraft [data-layer="aircraft"], body.off-trains [data-layer="trains"], body.off-buses [data-layer="buses"],
+body.off-roads [data-layer="roads"], body.off-ships [data-layer="ships"] { display: none !important; }
+#drawer.no-tabs { display: none; }
 #topbar #sources { flex: 1; }
 #topbar .settings-link { margin-left: auto; }
 
@@ -370,6 +390,9 @@ h3 { margin: 12px 0 4px; font-size: 13px; }
   #panel-show { width: 100%; height: 28px; border-left: none; border-top: 1px solid var(--border); }
   #topbar #sources { display: none; }
   .tabs input[type="search"] { width: 100px; }
+  /* Narrow screens: tighter tabs, and the filter drops to its own row if they don't fit. */
+  .tabs[data-tabs="drawer"] { flex-wrap: wrap; }
+  .tabs > button { padding: 9px 8px; }
 }
 
 /* ---------- settings page ---------- */
@@ -435,30 +458,17 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .settings label { align-content: start; }
 .hint a { color: var(--accent); }
 
-/* Leaflet's controls (layer chooser, zoom) in the app's own colours, light and dark. */
-.leaflet-control-layers, .leaflet-bar {
+/* Leaflet's controls (zoom, home, radar) in the app's own colours, light and dark. */
+.leaflet-bar {
   background: var(--panel); color: var(--text);
   border: 1px solid var(--border) !important; border-radius: 8px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
 }
-.leaflet-control-layers { font: inherit; font-size: 13px; }
-.leaflet-control-layers-expanded { padding: 8px 12px; }
-/* Leaflet builds its list in a <section>; undo the side panel's section border and padding. */
-.leaflet-control-layers-list { border: 0; padding: 0; }
-/* No base-map choices: drop their empty section and the divider under it. */
-.leaflet-control-layers-base, .leaflet-control-layers-separator { display: none; }
-.leaflet-control-layers label { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
-.leaflet-control-layers label > span, .leaflet-control-layers label > div { display: flex; align-items: center; gap: 6px; }
-.leaflet-control-layers input { accent-color: var(--accent); margin: 0; }
 .leaflet-bar a, .leaflet-bar a:hover {
   background: var(--panel); color: var(--text); border-bottom-color: var(--border);
 }
 .leaflet-bar a:hover { background: var(--border); }
 .leaflet-bar a.leaflet-disabled { background: var(--panel); color: var(--muted); }
-@media (prefers-color-scheme: dark) {
-  /* Leaflet's collapsed layers icon is dark; lighten it on the dark panel. */
-  .leaflet-control-layers-toggle { filter: invert(1) brightness(0.9); }
-}
 
 /* Buses: 🚌, the route number and a small arrow showing which way it's heading. */
 .leaflet-marker-icon.bus { background: none; border: none; }
@@ -478,3 +488,66 @@ img.logo { display: inline-block; vertical-align: middle; object-fit: contain; m
   background: #fff; border-radius: 3px; padding: 1px; box-sizing: content-box; }
 .details-body .title { display: flex; align-items: center; gap: 2px; }
 .details-body .title img.logo { margin-right: 6px; }
+
+/* ---------- history page ---------- */
+.history { max-width: 1100px; margin: 0 auto; padding: 0 16px 48px; }
+.history-header { flex-wrap: wrap; align-items: center; }
+.periods { display: flex; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.periods button {
+  font: inherit; font-size: 13px; padding: 5px 12px; border: none; border-radius: 6px;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.periods button:hover { color: var(--text); }
+.periods button.active { background: var(--accent); color: #fff; }
+#history-note:empty { display: none; }
+.history-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 12px 0 8px; }
+.history-tiles > div { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.history-tiles b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+.history-tiles span { color: var(--muted); font-size: 12px; }
+.history-block { padding: 20px 0; border-bottom: 1px solid var(--border); }
+.history-block[hidden] { display: none; }
+.history-block > h2 { font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 12px; }
+.history-block h3 { font-size: 13px; margin: 16px 0 6px; }
+.history-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.chart { margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.chart[hidden] { display: none; }
+.chart figcaption { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .bar { fill: var(--accent); }
+.chart .hit { fill: transparent; cursor: default; }
+.chart .hit:hover { fill: var(--text); fill-opacity: 0.06; }
+.chart .grid-line { stroke: var(--border); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.chart-tip {
+  position: fixed; z-index: 2000; pointer-events: none; padding: 6px 10px; font-size: 12px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.chart-tip[hidden] { display: none; }
+.history-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; }
+.ranked { margin: 0; padding: 0; list-style: none; }
+.ranked li { position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; font-size: 13px; }
+.ranked li.empty { color: var(--muted); }
+.ranked-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranked-n { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* A faint bar behind each row shows its share of the top entry. */
+.ranked-bar { position: absolute; left: 0; top: 2px; bottom: 2px; z-index: -1; border-radius: 4px; background: var(--accent); opacity: 0.14; }
+.ranked { isolation: isolate; }
+.history-list li { cursor: default; }
+.history-list li.interest-emergency b { color: var(--alert); }
+.history-subhead { display: flex; align-items: center; gap: 12px; }
+.history-subhead input {
+  margin-left: auto; font: inherit; font-size: 12px; padding: 4px 8px; width: 180px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text);
+}
+.table-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.table-wrap table.grid tbody tr { cursor: default; }
+.table-wrap table.grid th { position: sticky; top: 0; background: var(--panel); }
+.history-link { display: flex; color: var(--muted); text-decoration: none; }
+.history-link:hover { color: var(--text); }
+#topbar .history-link { margin-left: auto; }
+#topbar .history-link + .settings-link { margin-left: 0; }
+@media (max-width: 760px) {
+  .periods { margin-left: 0; width: 100%; }
+  .periods button { flex: 1; padding: 6px 4px; }
+}

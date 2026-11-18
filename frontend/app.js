@@ -441,6 +441,7 @@ function toast(text, kind = "") {
 }
 
 function onAlert(a) {
+  if (!groupOn("aircraft")) return; // switched off in the ☰ menu: no alerts either
   const route = routeText(a) ? ` (${routeText(a)})` : "";
   const text = `${label(a)}${route} overhead — ${fmtAlt(a.altitude_ft)}, ${fmtDist(a.distance_km)} ${a.direction}`;
   toast(text);
@@ -451,6 +452,7 @@ function onAlert(a) {
 }
 
 function onInterestAlert(a) {
+  if (!groupOn("aircraft")) return; // switched off in the ☰ menu: no alerts either
   const where = `${fmtDist(a.distance_km)} ${a.direction}${a.on_ground ? ", on the ground" : `, ${fmtAlt(a.altitude_ft)}`}`;
   const what = a.aircraft_name || a.type_code || a.kind || "aircraft";
   const text = `${a.interest.level === "emergency" ? "🚨" : "✨"} ${label(a)}: ${a.interest.reason} (${what}), ${where}`;
@@ -501,7 +503,7 @@ function restoreTabs() {
   for (const group of ["drawer", "panel"]) {
     const id = recall(`tab-${group}`);
     const button = id && document.querySelector(`[data-tabs="${group}"] [data-tab="${id}"]`);
-    if (button && !button.hidden) showTab(group, id);
+    if (button && tabShown(button)) showTab(group, id);
   }
 }
 
@@ -572,7 +574,7 @@ function select(kind, id) {
   } else if (kind === "disruption") {
     showDisruptionStops(item);
   } else if (kind === "road") {
-    if (!map.hasLayer(roadLayer)) roadLayer.addTo(map);
+    if (!map.hasLayer(roadLayer)) setGroup("roads", true);
     map.fitBounds(L.latLngBounds(item.lines.flat()).pad(0.4), { maxZoom: 14 });
     drawRoads();
   } else if (kind === "train") {
@@ -580,12 +582,12 @@ function select(kind, id) {
   } else if (kind === "rail") {
     // Incidents name areas, not places on the map: just the details.
   } else if (kind === "ship") {
-    if (!map.hasLayer(shipLayer)) shipLayer.addTo(map);
+    if (!map.hasLayer(shipLayer)) setGroup("ships", true);
     map.setView(shipPosition(item), Math.max(map.getZoom(), SELECT_ZOOM.ship));
     if (!again) loadShipTrail(id);
   } else {
     // Zoomed in far enough for buses to be drawn.
-    if (!map.hasLayer(busLayer)) busLayer.addTo(map);
+    if (!map.hasLayer(busLayer)) setGroup("buses", true);
     map.setView([item.lat, item.lon], Math.max(map.getZoom(), busMinZoom + 2));
     if (!again || !shownRoute) showRoute(item);
     renderBuses();
@@ -794,10 +796,11 @@ async function loadStats() {
     const stats = await getJSON("/api/stats");
     const s = stats.last_24h;
     document.getElementById("stats").innerHTML =
-      `<div><b>${s.aircraft}</b><span>aircraft</span></div>
-       <div><b>${s.visits}</b><span>sightings</span></div>
-       <div><b>${s.overhead}</b><span>overhead</span></div>` +
-      (stats.ships ? `<div><b>${stats.ships.last_24h.ships}</b><span>vessels</span></div>` : "");
+      `<div data-layer="aircraft"><b>${s.aircraft}</b><span>aircraft</span></div>
+       <div data-layer="aircraft"><b>${s.visits}</b><span>sightings</span></div>
+       <div data-layer="aircraft"><b>${s.overhead}</b><span>overhead</span></div>` +
+      (stats.ships ? `<div data-layer="ships"><b>${stats.ships.last_24h.ships}</b><span>vessels</span></div>` : "");
+    fixToday();
   } catch (e) {
     console.warn(e);
   }
@@ -1009,6 +1012,7 @@ function renderTrains(trains) {
   // Trains are on: show their tabs and sections.
   document.querySelector('[data-tab="trains-tab"]').hidden = false;
   document.querySelector('[data-tab="departures-tab"]').hidden = !(trains.boards || []).length;
+  fixTabs();
   const st = trains.status;
   const title = st.error || (st.connected
     ? `Live · ${st.messages} reports received · tracking ${st.tracked} trains nationally` +
@@ -1251,6 +1255,7 @@ document.getElementById("train-boards").addEventListener("click", (e) => {
 });
 
 function onTrainAlert(t) {
+  if (!groupOn("trains")) return; // switched off in the ☰ menu: no alerts either
   const text = `${trainEmoji(t)} ${trainLabel(t)} (${t.operator || t.kind || "train"}) passing in about a minute`;
   toast(text);
   if ("Notification" in window && Notification.permission === "granted") {
@@ -1735,6 +1740,7 @@ function stationMessagesHtml(crs) {
 }
 
 function onRailAlert(i) {
+  if (!groupOn("trains")) return; // switched off in the ☰ menu: no alerts either
   const text = `🚆 ${i.summary}${i.operators.length ? ` (${railOperators(i)})` : ""}`;
   toast(text, "interesting");
   if ("Notification" in window && Notification.permission === "granted") {
@@ -2008,6 +2014,7 @@ function shipVisits(s) {
 }
 
 function onShipAlert(s) {
+  if (!groupOn("ships")) return; // switched off in the ☰ menu: no alerts either
   const emergency = s.interest.level === "emergency";
   const where = `${fmtDist(s.distance_km)} ${s.direction || ""}`.trim();
   const going = shipDestination(s) ? `, bound for ${shipDestination(s)}` : "";
@@ -2156,42 +2163,80 @@ async function loadRailways() {
   for (const line of lines) L.polyline(line, dashes).addTo(railLayer);
 }
 
-function addLayerControl(withTrains, withBuses, withRoads, withShips) {
-  const overlays = { "✈ Aircraft": aircraftLayer };
-  if (withTrains) {
-    overlays["🚆 Trains"] = trainLayer;
-    overlays["Railway lines"] = railLayer;
-  }
-  if (withBuses) {
-    busLayer.addTo(map);
-    overlays[BUS_LAYER_NAME] = busLayer;
-  }
-  if (withRoads) {
-    roadLayer.addTo(map);
-    overlays["🚧 Roads"] = roadLayer;
-  }
-  if (withShips) {
-    shipLayer.addTo(map);
-    overlays["🚢 Ships"] = shipLayer;
-  }
-  overlays["Airports"] = airportLayer;
-  overlays[RADAR_LAYER_NAME] = radarLayer;
-  radarLayer.addTo(map);
-  L.control.layers(null, overlays, { collapsed: window.innerWidth < 760 }).addTo(map);
+// ---------- ☰ what to show: each group is map layers plus its tabs and side-panel lists ----------
 
-  // Remember which layers this viewer switched off (a per-browser convenience).
+const shownGroups = []; // [{ key, label, layers }]
+const KIND_GROUP = { aircraft: "aircraft", train: "trains", rail: "trains", bus: "buses", disruption: "buses", road: "roads", ship: "ships" };
+const groupOn = (key) => !document.body.classList.contains(`off-${key}`);
+const tabShown = (b) => !b.hidden && !(b.dataset.layer && !groupOn(b.dataset.layer));
+
+// If the open tab was switched off, open the first one still shown; hide the table drawer when none are.
+function fixTabs() {
+  for (const group of ["drawer", "panel"]) {
+    const buttons = [...document.querySelectorAll(`[data-tabs="${group}"] button[data-tab]`)];
+    const active = buttons.find((b) => b.classList.contains("active"));
+    const first = buttons.find(tabShown);
+    if (active && !tabShown(active) && first) showTab(group, first.dataset.tab);
+    if (group === "drawer") {
+      if (drawer.classList.contains("no-tabs") === !first) continue;
+      drawer.classList.toggle("no-tabs", !first);
+      refreshMapSize();
+    }
+  }
+}
+
+// The Today counts belong to aircraft and ships; with both switched off there's nothing to show.
+function fixToday() {
+  const tiles = [...document.querySelectorAll("#stats > div")];
+  document.getElementById("today-group").hidden = tiles.length > 0 && !tiles.some((t) => groupOn(t.dataset.layer));
+}
+
+function setGroup(key, on, save = true) {
+  const g = shownGroups.find((x) => x.key === key);
+  if (!g) return;
+  document.body.classList.toggle(`off-${key}`, !on);
+  for (const layer of g.layers) {
+    // Fire the events Leaflet's own layer chooser would, so buses and ships redraw.
+    if (on && !map.hasLayer(layer)) { layer.addTo(map); map.fire("overlayadd", { layer }); }
+    if (!on && map.hasLayer(layer)) { layer.remove(); map.fire("overlayremove", { layer }); }
+  }
+  const box = document.querySelector(`#layers-list input[value="${key}"]`);
+  if (box) box.checked = on;
+  if (!on && KIND_GROUP[selection.kind] === key) deselect();
+  fixTabs();
+  fixToday();
+  if (save) {
+    // Which groups this viewer switched off (a per-browser convenience).
+    remember("hiddenGroups", JSON.stringify(shownGroups.filter((x) => !groupOn(x.key)).map((x) => x.key)));
+  }
+}
+
+function addLayerMenu(withTrains, withBuses, withRoads, withShips) {
+  shownGroups.push({ key: "aircraft", label: "✈ Aircraft", layers: [aircraftLayer, airportLayer] });
+  if (withTrains) shownGroups.push({ key: "trains", label: "🚆 Trains", layers: [trainLayer, railLayer] });
+  if (withBuses) shownGroups.push({ key: "buses", label: BUS_LAYER_NAME, layers: [busLayer] });
+  if (withRoads) shownGroups.push({ key: "roads", label: "🚧 Roads", layers: [roadLayer] });
+  if (withShips) shownGroups.push({ key: "ships", label: "🚢 Ships", layers: [shipLayer] });
+  shownGroups.push({ key: "radar", label: RADAR_LAYER_NAME, layers: [radarLayer] });
+
+  const list = document.getElementById("layers-list");
+  const button = document.getElementById("layers-button");
+  list.innerHTML = shownGroups.map((g) =>
+    `<label role="menuitemcheckbox"><input type="checkbox" value="${g.key}" checked> ${g.label}</label>`).join("");
+  list.addEventListener("change", (e) => setGroup(e.target.value, e.target.checked));
+  const open = (on) => {
+    list.hidden = !on;
+    button.setAttribute("aria-expanded", String(on));
+  };
+  button.addEventListener("click", (e) => { e.stopPropagation(); open(list.hidden); });
+  document.addEventListener("click", (e) => { if (!list.hidden && !list.contains(e.target)) open(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !list.hidden) { open(false); button.focus(); } });
+
   let hidden = [];
   try {
-    hidden = JSON.parse(localStorage.getItem("hiddenLayers") || "[]");
+    hidden = JSON.parse(recall("hiddenGroups") || "[]");
   } catch {}
-  for (const name of hidden) overlays[name]?.remove();
-  const save = () => {
-    try {
-      const off = Object.keys(overlays).filter((n) => !map.hasLayer(overlays[n]));
-      localStorage.setItem("hiddenLayers", JSON.stringify(off));
-    } catch {}
-  };
-  map.on("overlayadd overlayremove", save);
+  for (const g of shownGroups) setGroup(g.key, !hidden.includes(g.key), false);
 }
 
 async function init() {
@@ -2230,7 +2275,7 @@ async function init() {
     // The live feed sends ships every few seconds; don't wait for it.
     getJSON("/api/ships").then(renderShips).catch(console.warn);
   }
-  addLayerControl(cfg.trains, cfg.buses?.enabled, cfg.roads?.enabled, cfg.ships?.enabled);
+  addLayerMenu(cfg.trains, cfg.buses?.enabled, cfg.roads?.enabled, cfg.ships?.enabled);
   renderBuses();
   if (cfg.trains && cfg.passing_window?.enabled) {
     passing = { minutes: cfg.passing_window.minutes };

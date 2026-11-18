@@ -10,8 +10,13 @@
 </head>
 <body class="tracker">
   <header id="topbar">
-    <h1>✈ 🚆 Passerby <span id="app-version" class="app-version"></span></h1>
+    <div class="layers-menu">
+      <button type="button" id="layers-button" class="menu-button" title="Choose what to show" aria-haspopup="true" aria-expanded="false" aria-controls="layers-list">☰</button>
+      <div id="layers-list" class="layers-list" role="menu" hidden></div>
+    </div>
+    <h1>Passerby <span id="app-version" class="app-version"></span></h1>
     <div id="sources"></div>
+    <a class="history-link" href="history.html" title="History" aria-label="History"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
     <a class="settings-link" href="settings.html" title="Settings">⚙</a>
   </header>
 
@@ -23,10 +28,10 @@
       <section id="drawer">
         <div id="drawer-handle" title="Drag to resize"></div>
         <nav class="tabs" data-tabs="drawer">
-          <button type="button" data-tab="aircraft-tab" class="active">✈ Aircraft <span id="aircraft-count" class="count">0</span></button>
-          <button type="button" data-tab="trains-tab" hidden>🚆 Trains <span id="trains-count" class="count">0</span> <span id="trains-status"></span></button>
-          <button type="button" data-tab="buses-tab" hidden>🚌 Buses <span id="buses-count" class="count">0</span> <span id="buses-status"></span></button>
-          <button type="button" data-tab="ships-tab" hidden>🚢 Ships <span id="ships-count" class="count">0</span> <span id="ships-status"></span></button>
+          <button type="button" data-tab="aircraft-tab" data-layer="aircraft" class="active">✈ Aircraft <span id="aircraft-count" class="count">0</span></button>
+          <button type="button" data-tab="trains-tab" data-layer="trains" hidden>🚆 Trains <span id="trains-count" class="count">0</span> <span id="trains-status"></span></button>
+          <button type="button" data-tab="buses-tab" data-layer="buses" hidden>🚌 Buses <span id="buses-count" class="count">0</span> <span id="buses-status"></span></button>
+          <button type="button" data-tab="ships-tab" data-layer="ships" hidden>🚢 Ships <span id="ships-count" class="count">0</span> <span id="ships-status"></span></button>
           <span class="spacer"></span>
           <input id="filter" type="search" placeholder="Filter…" aria-label="Filter the table">
           <button type="button" id="drawer-toggle" class="icon-button" title="Hide or show the table">▾</button>
@@ -75,7 +80,7 @@
     <aside id="panel">
       <nav class="tabs" data-tabs="panel">
         <button type="button" data-tab="now-tab" class="active">Now</button>
-        <button type="button" data-tab="departures-tab" hidden>Departures</button>
+        <button type="button" data-tab="departures-tab" data-layer="trains" hidden>Departures</button>
         <button type="button" data-tab="weather-tab">Weather</button>
         <span class="spacer"></span>
         <button type="button" id="panel-hide" class="icon-button" title="Hide the side panel">▸</button>
@@ -86,7 +91,7 @@
 
       <!-- Each group folds away by clicking its heading. -->
       <div id="now-tab" class="tab-panel">
-        <div id="aircraft-group" class="group">
+        <div id="aircraft-group" class="group" data-layer="aircraft">
           <button type="button" class="group-head">✈ Aircraft</button>
           <section>
             <h2>Overhead now <span id="overhead-count" class="count">0</span></h2>
@@ -98,7 +103,7 @@
           </section>
         </div>
 
-        <div id="trains-group" class="group" hidden>
+        <div id="trains-group" class="group" data-layer="trains" hidden>
           <button type="button" class="group-head">🚆 Trains</button>
           <section>
             <h2>Passing home <span id="passing-ahead" class="meta"></span></h2>
@@ -106,7 +111,7 @@
           </section>
         </div>
 
-        <div id="rail-group" class="group" hidden>
+        <div id="rail-group" class="group" data-layer="trains" hidden>
           <button type="button" class="group-head">🚆 Rail disruptions</button>
           <section>
             <h2>Train companies</h2>
@@ -118,7 +123,7 @@
           </section>
         </div>
 
-        <div id="buses-group" class="group" hidden>
+        <div id="buses-group" class="group" data-layer="buses" hidden>
           <button type="button" class="group-head">🚌 Buses</button>
           <section>
             <h2>Near home <span id="near-buses-count" class="count">0</span> <span id="near-buses-range" class="meta"></span></h2>
@@ -130,7 +135,7 @@
           </section>
         </div>
 
-        <div id="ships-group" class="group" hidden>
+        <div id="ships-group" class="group" data-layer="ships" hidden>
           <button type="button" class="group-head">🚢 Ships</button>
           <section>
             <h2>Interesting now <span id="interesting-ships-count" class="count">0</span></h2>
@@ -138,7 +143,7 @@
           </section>
         </div>
 
-        <div id="roads-group" class="group" hidden>
+        <div id="roads-group" class="group" data-layer="roads" hidden>
           <button type="button" class="group-head">🚧 Roads</button>
           <section>
             <h2>Closures and incidents <span id="roads-count" class="count">0</span></h2>

@@ -110,6 +110,21 @@ class ShipDetails:
                 "SELECT COUNT(*), COUNT(DISTINCT mmsi) FROM visits WHERE last_seen >= ?", (since,)).fetchone()
         return {"visits": visits, "ships": ships}
 
+    def history_summary(self, since: float, until: float, list_limit: int = 300) -> dict:
+        """Ship visits in one period, for the history page."""
+        span = (until, since)
+        with self._lock:
+            visits, ships = self.db.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT mmsi) FROM visits WHERE first_seen < ? AND last_seen >= ?",
+                span).fetchone()
+            rows = self.db.execute(
+                "SELECT v.mmsi, v.first_seen, v.last_seen, v.closest_km, s.name, s.type_code, s.length_m,"
+                " s.destination FROM visits v LEFT JOIN ships s USING (mmsi)"
+                " WHERE v.first_seen < ? AND v.last_seen >= ? ORDER BY v.last_seen DESC LIMIT ?",
+                (*span, list_limit)).fetchall()
+        keys = ("mmsi", "first_seen", "last_seen", "closest_km", "name", "type_code", "length_m", "destination")
+        return {"visits": visits, "ships": ships, "recent": [dict(zip(keys, r)) for r in rows]}
+
     def close(self) -> None:
         with self._lock:
             self.db.close()

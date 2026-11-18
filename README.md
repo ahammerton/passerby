@@ -5,12 +5,12 @@ shows aircraft (anywhere in the world), and trains, buses and road closures (UK)
 around your home on a live map. It alerts you when something flies overhead or a
 train is about to pass, and keeps a history of what it has seen.
 
-![Passerby around Heathrow: airliners in their airline colours, a selected British Airways flight, road closures and the overhead list](docs/screenshots/map-light.png)
+![Passerby around Heathrow: airliners in their airline colours, the ☰ menu of what to show, a selected British Airways flight and the overhead list](docs/screenshots/map-light.png)
 
 <details>
 <summary>Dark mode, zoomed in</summary>
 
-![Passerby in dark mode, zoomed in on Heathrow, with an SAS flight selected](docs/screenshots/map-dark.png)
+![Passerby in dark mode, zoomed in on Heathrow, with a British Airways flight selected](docs/screenshots/map-dark.png)
 
 </details>
 
@@ -64,7 +64,7 @@ docker compose up -d
 Open `http://<server-ip>:8000`. The image is `ghcr.io/ahammerton/passerby`, also on
 Docker Hub as [`cyrune/passerby`](https://hub.docker.com/r/cyrune/passerby)
 (amd64 and arm64): `latest` follows the main branch, and release tags such as
-`0.2.1`, `0.2` and `0` follow releases.
+`0.3.0`, `0.3` and `0` follow releases.
 
 The app's data (history, caches, settings and logins) is kept in the `passerby_data`
 volume. To keep it in a folder instead, create the folder owned by uid 1000, the app's
@@ -259,8 +259,8 @@ downloaded once from OpenStreetMap through the Overpass API, then cached in
 `data/railways.json` for 30 days. If the main Overpass server is busy, mirror
 servers are tried. If all of them fail, the app retries in the background
 (1 minute, doubling up to 30), and trains use straight lines until the track
-arrives. The track is drawn as grey dashed lines, which you can turn
-off with the "Railway lines" layer toggle. It also gives the route each train
+arrives. The track is drawn as grey dashed lines, shown and hidden
+with the trains (☰ menu → Trains). It also gives the route each train
 follows between two stations. Where a stretch isn't in the track data (for
 example, a next station far outside the area), the train falls back to a
 straight line, and its details say so. "Approaching home" times use the
@@ -503,9 +503,26 @@ saved. Ships stay off until there's a key (or your own receiver, below).
 The **🌧 Rain radar** map layer shows the last two hours of radar from
 [RainViewer](https://www.rainviewer.com/) (free, no key), every 10 minutes.
 The player at the bottom left shows the frame's time; ▶ plays the two hours,
-pausing on the latest. Untick the layer to hide it (remembered).
+pausing on the latest. Untick it in the ☰ menu to hide it (remembered).
 RainViewer's free images stop at zoom 7, so closer in they're enlarged: fine
 for showing where the rain is, not street by street.
+
+## History
+
+The **History** page (the clock button at the top right) shows what has passed by over a period:
+today, the last 7 or 30 days, the last year, or everything since Passerby started recording.
+
+- **Totals:** different aircraft, how many came overhead, sightings, trains past home and ships.
+- **Charts:** different aircraft each day, and the busiest hours of the day. Hover over a bar for its numbers.
+- **Top lists:** airlines, aircraft types and routes.
+- **Interesting aircraft:** emergencies, rare types, notable aircraft and military, with the reason.
+- **Overhead log:** the latest 300 aircraft that came overhead, with a filter.
+- **Trains past home** (with watched stations set): the busiest hours, train companies and recent trains.
+- **Ships** (when on): recent visits.
+
+It's all built from Passerby's own records in `data/`. Routes, airline names and the reasons
+aircraft were interesting are recorded from this version on, so older sightings show without them,
+and trains past home are logged from this version on.
 
 ## Your own ADS-B receiver
 
@@ -613,6 +630,7 @@ outside.
 | `GET /api/session`, `POST /api/login`, `POST /api/logout` | Admin sign-in when `ADMIN_PASSWORD` is set |
 | `GET /api/stations?lat=&lon=&radius_km=` | Stations near a point |
 | `GET /api/history?limit=100&overhead_only=true` | Logged sightings |
+| `GET /api/history/summary?period=7d` | Everything the History page shows for `today`, `7d`, `30d`, `365d` or `all` |
 | `GET /api/stats` | Counts for the last 24h and 7 days (with ship visits when ships are on) |
 | `WS /ws` | `snapshot` messages every 2s (with `trains`, `buses` and `roads` when enabled, and `ships` every 10s), plus `alert` / `interest_alert` / `train_alert` / `rail_alert` / `ship_alert` messages |
 
@@ -654,7 +672,6 @@ in `main.py`.
 ## Ideas for next steps
 
 - Send alerts to your phone via ntfy or Home Assistant
-- Add a history page with charts built from `/api/history`
 
 ## Third-party data and services
 

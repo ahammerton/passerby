@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Passerby history</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+  <main class="history">
+    <header class="settings-header history-header">
+      <a href="/" class="back">← Map</a>
+      <h1>History</h1>
+      <nav class="periods" aria-label="Period">
+        <button type="button" data-period="today">Today</button>
+        <button type="button" data-period="7d">7 days</button>
+        <button type="button" data-period="30d">30 days</button>
+        <button type="button" data-period="365d">Year</button>
+        <button type="button" data-period="all">All</button>
+      </nav>
+    </header>
+    <p id="history-note" class="meta" role="status">Loading…</p>
+
+    <div id="history-tiles" class="history-tiles"></div>
+
+    <section class="history-block" data-layer="aircraft">
+      <h2>✈ Aircraft</h2>
+      <div class="history-charts">
+        <figure id="chart-days" class="chart" hidden>
+          <figcaption>Different aircraft each day</figcaption>
+          <div class="chart-body"></div>
+        </figure>
+        <figure id="chart-hours" class="chart">
+          <figcaption>Busiest hours <span class="meta">(sightings by time of day)</span></figcaption>
+          <div class="chart-body"></div>
+        </figure>
+      </div>
+      <div class="history-columns">
+        <div><h3>Airlines</h3><ol id="top-airlines" class="ranked"></ol></div>
+        <div><h3>Aircraft types</h3><ol id="top-types" class="ranked"></ol></div>
+        <div><h3>Routes</h3><ol id="top-routes" class="ranked"></ol></div>
+      </div>
+      <h3>Interesting <span id="interesting-count" class="count">0</span></h3>
+      <ul id="interesting-list" class="list history-list"></ul>
+      <div class="history-subhead">
+        <h3>Overhead <span id="overhead-count" class="count">0</span> <span id="overhead-more" class="meta"></span></h3>
+        <input id="overhead-filter" type="search" placeholder="Filter…" aria-label="Filter the overhead list">
+      </div>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>When</th><th>Flight</th><th>Aircraft</th><th>Route</th>
+            <th class="num">Closest</th><th class="num">Highest</th></tr></thead>
+          <tbody id="overhead-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="history-block" id="trains-block" data-layer="trains" hidden>
+      <h2>🚆 Trains past home</h2>
+      <div class="history-charts">
+        <figure id="chart-trains" class="chart">
+          <figcaption>Busiest hours <span class="meta">(trains passing by time of day)</span></figcaption>
+          <div class="chart-body"></div>
+        </figure>
+        <div><h3>Train companies</h3><ol id="top-operators" class="ranked"></ol></div>
+      </div>
+      <h3>Recent</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Passed</th><th>Train</th><th>Company</th><th>From → to</th><th class="num">Running</th></tr></thead>
+          <tbody id="train-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="history-block" id="ships-block" data-layer="ships" hidden>
+      <h2>🚢 Ships</h2>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Last seen</th><th>Ship</th><th>Heading for</th><th>Size</th><th class="num">Closest</th></tr></thead>
+          <tbody id="ship-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div id="chart-tip" class="chart-tip" hidden></div>
+  <script src="history.js"></script>
+</body>
+</html>

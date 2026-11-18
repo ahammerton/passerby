@@ -6,8 +6,27 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-18
+
+### Added
+
+- A **History** page (the clock button next to Settings): totals, aircraft per day, the busiest
+  hours, top airlines, aircraft types and routes, interesting aircraft, an overhead log, trains past
+  home and ship visits, for today, 7 days, 30 days, a year or everything.
+- Sightings now record the aircraft's route, airline, model and why it was interesting, and trains
+  passing home are logged. Existing databases are upgraded automatically.
+
 ### Changed
 
+- **What to show** has moved from the box on the map to a **☰ menu** at the top left. Trains and
+  railway lines are now one item (**Trains**), as are aircraft and airports (**Aircraft**).
+- Switching something off now hides it everywhere: on the map, in the tables under it, in the side
+  panel (including Departures and Rail disruptions for trains) and in the Today counts.
+- The ✈ 🚆 icons before the Passerby name are gone.
+- Alerts follow the menu too: nothing switched off pops up a notice or a browser notification.
+- On narrow screens the table tabs are tighter, and the filter box moves to its own row instead
+  of being cut off.
+- New README screenshots.
 - The Docker image now runs on **Python 3.15** (was 3.12). The tests also run on 3.15.
 
 ## [0.2.1] - 2026-11-17

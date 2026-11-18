@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .aggregator import Aggregator
 from .aircraft_types import classify
-from .airlines import ICAO_CODE, Logos, identify
+from .airlines import AIRLINES, ICAO_CODE, Logos, identify
 from .interesting import RARE_WINDOW_DAYS, Interest
 from .bus_timetable import FILE as BUS_TIMETABLE_FILE
 from .bus_timetable import BusTimetable, area_key, build, download, pick_region, stale
@@ -446,6 +446,8 @@ async def broadcast_loop(state: AppState) -> None:
             state.train_state, train_alerts = state.trains.snapshot()
             message["trains"] = state.train_state
             alert_messages += [{"type": "train_alert", "train": t} for t in train_alerts]
+            if train_alerts:
+                await asyncio.to_thread(state.store.record_train_passes, train_alerts)
         if state.buses:
             message["buses"] = state.buses.snapshot()
         if state.roads:
@@ -1021,6 +1023,32 @@ async def logo(code: str):
 @app.get("/api/history")
 def history(limit: int = 100, overhead_only: bool = False):
     return tracker().store.recent(min(limit, 1000), overhead_only)
+
+
+HISTORY_PERIODS = {"today": None, "7d": 7, "30d": 30, "365d": 365, "all": None}
+
+
+@app.get("/api/history/summary")
+def history_summary(period: str = "7d"):
+    """What has passed by in one period: today (since local midnight), 7d, 30d, 365d or all."""
+    if period not in HISTORY_PERIODS:
+        raise HTTPException(400, f"period must be one of {', '.join(HISTORY_PERIODS)}")
+    state = tracker()
+    now = time.time()
+    if period == "today":
+        since = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    elif period == "all":
+        since = 0.0
+    else:
+        since = now - HISTORY_PERIODS[period] * 86400
+    result = {"period": period, "since": since, "until": now, **state.store.summary(since, now + 1)}
+    for airline in result["aircraft"]["airlines"]:  # older records have no name stored
+        if not airline["name"] and (known := AIRLINES.get(airline["code"])):
+            airline["name"] = known[0]
+    result["trains"]["enabled"] = state.trains is not None
+    if state.ship_details:
+        result["ships"] = state.ship_details.history_summary(since, now + 1)
+    return result
 
 
 @app.get("/api/stats")
