@@ -45,6 +45,15 @@ class SettingsUpdate(BaseModel):
     readsb_enabled: bool | None = None
     readsb_url: str | None = Field(None, max_length=300)
     online_feeds: Literal["fill", "backup"] | None = None
+    # adsb.lol allows 500 requests a day for each IP address: one every 173 s at most.
+    adsblol_enabled: bool | None = None
+    adsblol_interval: int | None = Field(None, ge=180, le=3600)
+
+    @field_validator("adsblol_interval", mode="before")
+    @classmethod
+    def _adsblol_floor(cls, v):
+        # Older settings and backups say 30: raise them to the minimum rather than refuse them.
+        return max(int(v), 180) if isinstance(v, (int, float)) else v
 
     distance_unit: Literal["km", "mi", "nm"] | None = None
     altitude_unit: Literal["ft", "m"] | None = None
@@ -75,6 +84,8 @@ class SettingsUpdate(BaseModel):
     ships_show_leisure: bool | None = None
     ship_alerts: Literal["all", "emergencies", "off"] | None = None
     ais_receiver: str | None = Field(None, max_length=200)
+    space_enabled: bool | None = None
+    space_alerts: Literal["stations", "off"] | None = None
     bus_region: Literal["auto", "south_east", "london", "south_west", "east_anglia", "east_midlands",
                         "west_midlands", "north_west", "north_east", "yorkshire"] | None = None
 

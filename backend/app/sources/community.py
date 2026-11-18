@@ -8,13 +8,16 @@ These are unfiltered (military included) and update every few seconds.
 import httpx
 
 from ..models import Aircraft
-from .base import AircraftSource
+from .base import AircraftSource, RateLimited
 from .readsb import parse_response
 
 KM_PER_NM = 1.852
 MAX_RADIUS_NM = 250  # both APIs cap point queries at 250 nm
 
 ADSBLOL_URL = "https://api.adsb.lol"
+# adsb.lol allows 500 requests a day for each IP address (x-ratelimit-limit: 500;w=86400, November 2026):
+# one every 173 s at most. Shorter intervals are raised to this.
+ADSBLOL_MIN_INTERVAL = 180
 AIRPLANESLIVE_URL = "https://api.airplanes.live"
 
 
@@ -41,8 +44,27 @@ class CommunitySource(AircraftSource):
 
     async def fetch(self) -> list[Aircraft]:
         resp = await self.client.get(self.url)
+        if resp.status_code == 429:
+            raise rate_limited(resp)
         resp.raise_for_status()
         body = resp.json()
         if "error" in body:
             raise RuntimeError(body["error"])
         return parse_response(body, self.name)
+
+
+def rate_limited(resp: httpx.Response) -> RateLimited:
+    """A 429 as a RateLimited error, with the wait the feed asks for (x-ratelimit-* or Retry-After)."""
+    h = resp.headers
+    wait = None
+    for name in ("retry-after", "x-ratelimit-reset"):
+        try:
+            wait = float(h[name])
+            break
+        except (KeyError, ValueError):
+            continue
+    limit = (h.get("x-ratelimit-limit") or "").split(",")[0].strip()
+    daily = h.get("x-ratelimit-remaining") == "0" and "w=86400" in (h.get("x-ratelimit-limit") or "")
+    if daily:
+        return RateLimited(f"Daily limit reached ({limit} requests a day)", wait)
+    return RateLimited("Rate limited", wait)

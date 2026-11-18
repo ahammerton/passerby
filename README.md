@@ -46,6 +46,7 @@ train is about to pass, and keeps a history of what it has seen.
 - **Buses** (optional, England): live positions from the DfT's [Bus Open Data Service](https://www.gov.uk/guidance/find-and-use-bus-open-data), shown when the map is zoomed in
 - **Roads** (optional, England): closures and incidents on motorways and major A roads from National Highways
 - **Ships** (optional, anywhere with coverage): live AIS positions from [aisstream.io](https://aisstream.io), with names, types, flags, sizes and destinations (with port names), alerts for cruise ships, warships, giant ships and emergency beacons, and how often each ship has been seen
+- **Space** (anywhere, no key): the International Space Station and China's Tiangong moving live on the map with their next orbit, when they pass over home and whether you can see them, the brightest satellites passing tonight, and an alert 5 minutes before a station is visible. Orbits from [CelesTrak](https://celestrak.org)
 - **Rain radar** from [RainViewer](https://www.rainviewer.com)
 - **Context**: nearby airports (OpenFlights) and METAR weather (aviationweather.gov)
 - **History**: every sighting is logged to SQLite (`data/sightings.db`)
@@ -64,7 +65,7 @@ docker compose up -d
 Open `http://<server-ip>:8000`. The image is `ghcr.io/ahammerton/passerby`, also on
 Docker Hub as [`cyrune/passerby`](https://hub.docker.com/r/cyrune/passerby)
 (amd64 and arm64): `latest` follows the main branch, and release tags such as
-`0.3.0`, `0.3` and `0` follow releases.
+`0.4.0`, `0.4` and `0` follow releases.
 
 The app's data (history, caches, settings and logins) is kept in the `passerby_data`
 volume. To keep it in a folder instead, create the folder owned by uid 1000, the app's
@@ -159,11 +160,14 @@ so set `CONTACT` in `.env` to your email or a URL. Until then, photos stay off.
 
 ### Community feeds
 
-**adsb.lol** is on by default and is polled every 30 seconds (`ADSBLOL_INTERVAL`);
-planes keep moving smoothly in between. It rate-limits each internet connection,
-so run only one copy of the app per connection: two copies, or a shorter
-interval, can get you temporarily blocked (HTTP 429). It reports
-military aircraft too; these get a **MIL** badge.
+**adsb.lol** is on by default and is checked every 200 seconds (`ADSBLOL_INTERVAL`,
+or Settings → Aircraft); planes keep moving smoothly in between. adsb.lol allows
+**500 requests a day** for each internet connection, one every 173 seconds, so
+intervals under 180 seconds are raised to 180. Run only one copy of the app per
+connection, since copies share the allowance. If the day's requests run out
+anyway, Passerby waits until adsb.lol says they reset, and the top bar shows
+"adsb.lol (paused until HH:MM)". It reports military aircraft too; these get a
+**MIL** badge.
 
 **airplanes.live** uses the same data format, but its API now asks you to
 email `contact@airplanes.live` describing your project first. Once they've
@@ -498,6 +502,28 @@ saved. Ships stay off until there's a key (or your own receiver, below).
   radius. aisstream.io offers no uptime guarantee and keeps no history; if
   the connection drops, the app reconnects with a growing wait.
 
+## Space stations and satellites
+
+On by default and needs no key (`SPACE_ENABLED`, or Settings → Space).
+
+- **On the map:** the International Space Station and Tiangong, China's space station,
+  moving live. Their path is drawn for the last 10 minutes (solid) and the next orbit
+  (dashed). A station glows when it's above your horizon.
+- **Passes:** the side panel lists the station passes you can see over the next 3 days:
+  where each one appears, its highest point, and whether it sets or fades into Earth's
+  shadow. Selecting a station also lists the passes you can't see, and why (daylight,
+  Earth's shadow or too low).
+- **Bright satellites:** the best passes of the ~150 brightest satellites and rocket
+  stages in the next 12 hours.
+- **Alerts** (`SPACE_ALERTS=stations`): 5 minutes before a station is visible, with
+  where to look. `SPACE_ALERTS=off` turns them off.
+
+A pass is visible when the satellite is lit by the Sun, your sky is dark (the Sun more
+than 6° below the horizon) and it's at least 10° up. Positions come from SGP4 with
+[CelesTrak](https://celestrak.org)'s orbital elements, downloaded twice a day and kept
+in `data/`. They match the Skyfield astronomy library to within a few hundredths of a
+degree, and pass times to a second or two.
+
 ## Rain radar
 
 The **🌧 Rain radar** map layer shows the last two hours of radar from
@@ -613,6 +639,7 @@ outside.
 | `GET /api/photo/{icao24}` | Cached planespotters photo, or `null` |
 | `GET /api/logo/{icao}` | Airline logo (PNG) by 3-letter ICAO airline code, or 404 |
 | `GET /api/trains` | Trains near home with timetable details, departure boards and estimated passes |
+| `GET /api/space` | Space stations (position, path, passes over home) and the visible passes coming up |
 | `GET /api/buses` | Buses within the bus radius, with feed status and nearby disruptions |
 | `GET /api/buses/route?id=` | The route a bus is running: road path or stops joined, and every stop |
 | `GET /api/radar` | Rain radar frames (RainViewer tile addresses) |
@@ -689,6 +716,7 @@ redistribute it. Each has its own terms, and some need you to register:
 | Airports | [OpenFlights](https://openflights.org/data) | ODbL |
 | Weather | [aviationweather.gov](https://aviationweather.gov) | Public domain (US government) |
 | Rain radar | [RainViewer](https://www.rainviewer.com/api.html) | Free API, with attribution |
+| Satellite orbits | [CelesTrak](https://celestrak.org) | Free; each file at most once every 2 hours |
 | Trains | [Network Rail open data feeds](https://publicdatafeeds.networkrail.co.uk/ntrod/) | "Contains information of Network Rail Infrastructure Limited licensed under the following licence" (the Network Rail data feeds licence) |
 | Railway stations | [uk-railway-stations](https://github.com/davwheat/uk-railway-stations) | © David Wheatley, Trainline EU and contributors, ODbL |
 | Buses | [Bus Open Data Service](https://www.gov.uk/guidance/find-and-use-bus-open-data) (DfT) | Open Government Licence |

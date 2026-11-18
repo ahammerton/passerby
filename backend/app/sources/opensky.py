@@ -11,7 +11,7 @@ import httpx
 
 from ..geo import bounding_box
 from ..models import M_TO_FT, MS_TO_FPM, MS_TO_KT, Aircraft
-from .base import AircraftSource
+from .base import AircraftSource, RateLimited
 
 log = logging.getLogger(__name__)
 
@@ -110,8 +110,11 @@ class OpenSkySource(AircraftSource):
             headers=await self._auth_headers(),
         )
         if resp.status_code == 429:
-            retry = resp.headers.get("X-Rate-Limit-Retry-After-Seconds", "?")
-            raise RuntimeError(f"OpenSky quota exhausted, retry after {retry}s")
+            try:
+                retry = float(resp.headers["X-Rate-Limit-Retry-After-Seconds"])
+            except (KeyError, ValueError):
+                retry = None
+            raise RateLimited("Daily credits used up", retry)
         resp.raise_for_status()
         states = resp.json().get("states") or []
         return [parse_state(s) for s in states]

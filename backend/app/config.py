@@ -52,9 +52,9 @@ class Settings(BaseSettings):
     # Community ADS-B networks (unfiltered, includes military). adsb.lol is
     # open; airplanes.live asks you to email them before using the API.
     adsblol_enabled: bool = True
-    # adsb.lol rate-limits per IP address; every 30 s stays well clear of it (and planes are
-    # animated smoothly in between).
-    adsblol_interval: int = 30
+    # adsb.lol allows 500 requests a day for each IP address (one every 173 s); anything shorter
+    # than 180 s is raised to that. Its aircraft are moved along smoothly in between.
+    adsblol_interval: int = 200
     airplaneslive_enabled: bool = False
     airplaneslive_interval: int = 10
 
@@ -139,6 +139,11 @@ class Settings(BaseSettings):
     # Your own AIS receiver sending NMEA (e.g. AIS-catcher), alongside aisstream.io or instead of it:
     # udp://0.0.0.0:10110 to listen for it, or tcp://192.168.1.50:5012 to connect to it.
     ais_receiver: str = ""
+
+    # Space stations and bright satellites passing over (orbits from CelesTrak, no key needed).
+    space_enabled: bool = True
+    # "stations": an alert 5 minutes before a space station is visible; "off": none.
+    space_alerts: Literal["stations", "off"] = "stations"
 
     # METAR weather for nearby airports from aviationweather.gov.
     weather_interval: int = 600

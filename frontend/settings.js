@@ -64,11 +64,14 @@ async function loadStations() {
 }
 
 function render() {
-  for (const name of ["home_name", "home_lat", "home_lon", "distance_unit", "altitude_unit", "speed_unit", "aircraft_colours", "interesting_alerts", "ship_alerts",
+  for (const name of ["home_name", "home_lat", "home_lon", "distance_unit", "altitude_unit", "speed_unit", "aircraft_colours", "interesting_alerts", "ship_alerts", "space_alerts",
     "train_alert_seconds", "ais_receiver", "nrod_username", "opensky_client_id", "contact", "readsb_url", "online_feeds"]) {
     field(name).value = values[name] ?? "";
   }
   field("readsb_enabled").checked = !!values.readsb_enabled;
+  field("adsblol_enabled").checked = !!values.adsblol_enabled;
+  // Older settings may hold an interval under today's minimum; show what will actually be used.
+  field("adsblol_interval").value = Math.max(values.adsblol_interval ?? 200, 180);
   field("passing_window").checked = !!values.passing_window;
   field("passing_minutes").value = values.passing_minutes ?? 5;
   field("buses_enabled").checked = !!values.buses_enabled;
@@ -79,6 +82,7 @@ function render() {
   field("roads_enabled").checked = !!values.roads_enabled;
   field("rail_disruptions_enabled").checked = !!values.rail_disruptions_enabled;
   field("ships_enabled").checked = !!values.ships_enabled;
+  field("space_enabled").checked = !!values.space_enabled;
   field("ships_show_leisure").checked = !!values.ships_show_leisure;
   // Secrets: never filled in; just say whether one is saved.
   for (const el of form.querySelectorAll(".secret-state")) {
@@ -303,10 +307,14 @@ function collect() {
     ship_radius_km: round(values.ship_radius_km, 2),
     ships_show_leisure: field("ships_show_leisure").checked,
     ship_alerts: field("ship_alerts").value,
+    space_enabled: field("space_enabled").checked,
+    space_alerts: field("space_alerts").value,
     ais_receiver: field("ais_receiver").value.trim(),
     readsb_enabled: field("readsb_enabled").checked,
     readsb_url: field("readsb_url").value.trim(),
     online_feeds: field("online_feeds").value,
+    adsblol_enabled: field("adsblol_enabled").checked,
+    adsblol_interval: field("adsblol_interval").valueAsNumber,
     nrod_username: field("nrod_username").value.trim(),
     opensky_client_id: field("opensky_client_id").value.trim(),
     contact: field("contact").value.trim(),

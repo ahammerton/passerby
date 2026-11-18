@@ -35,6 +35,7 @@ from .ships.receiver import AisReceiver
 from .ships.ports import RETRY_SECONDS as PORTS_RETRY_SECONDS
 from .ships.ports import load_ports
 from .ships.tracker import ShipDetails, ShipTracker
+from .space import tracker as space
 from .airports import Airport, load_airports, nearest_airports
 from .config import Settings, env_settings, get_settings, read_overrides, reload_settings, write_overrides
 from .credentials import check_nrod, check_opensky
@@ -42,7 +43,8 @@ from .enrichment import ICAO24, EnrichmentCache, Enricher
 from .geo import haversine_km
 from .security import COOKIE, SESSION_SECONDS, AdminAuth, SecurityMiddleware
 from .sources import (
-    ADSBLOL_URL, AIRPLANESLIVE_URL, AircraftSource, CommunitySource, OpenSkySource, ReadsbSource, find_receiver,
+    ADSBLOL_MIN_INTERVAL, ADSBLOL_URL, AIRPLANESLIVE_URL, AircraftSource, CommunitySource, OpenSkySource,
+    RateLimited, ReadsbSource, find_receiver,
 )
 from .store import SightingStore
 from .trains.timetable import UK
@@ -101,6 +103,7 @@ class AppState:
         self.roads: Roads | None = None
         self.rail: RailDisruptions | None = None
         self.ships: ShipTracker | None = None
+        self.space: space.SpaceTracker | None = None
         self.ship_details: ShipDetails | None = None
         self.ship_interest = ShipInterest(settings.ship_alerts)
 
@@ -114,6 +117,9 @@ def build_sources(settings: Settings, client: httpx.AsyncClient) -> list[Aircraf
         ("airplaneslive", AIRPLANESLIVE_URL, settings.airplaneslive_enabled, settings.airplaneslive_interval),
     ]
     for name, url, enabled, interval in community:
+        if name == "adsblol" and interval < ADSBLOL_MIN_INTERVAL:
+            log.warning("ADSBLOL_INTERVAL %ss is under adsb.lol's daily limit; using %ss", interval, ADSBLOL_MIN_INTERVAL)
+            interval = ADSBLOL_MIN_INTERVAL
         if enabled:
             sources.append(CommunitySource(
                 client, name=name, base_url=url, lat=settings.home_lat, lon=settings.home_lon,
@@ -280,14 +286,28 @@ async def poll_source(state: AppState, source: AircraftSource) -> None:
         try:
             aircraft = await source.fetch()
             state.aggregator.update(source.name, aircraft)
-            status.update(ok=True, last_update=time.time(), count=len(aircraft), error=None)
+            status.update(ok=True, last_update=time.time(), count=len(aircraft), error=None, resumes_at=None)
             backoff = 0.0
+        except RateLimited as exc:
+            if exc.retry_after is not None:
+                # The feed says when its quota resets: wait until then (plus a minute's margin) rather
+                # than spending tomorrow's requests on refusals. Its last aircraft stay until they age out.
+                wait = min(exc.retry_after, 86400) + 60
+                resumes = time.time() + wait
+                status.update(ok=False, resumes_at=resumes,
+                              error=f"{exc}; resumes at {datetime.fromtimestamp(resumes).strftime('%H:%M')}")
+                log.warning("%s: %s, waiting %.0f min", source.name, exc, wait / 60)
+                await asyncio.sleep(wait)
+                continue
+            backoff = min(max(backoff * 2, source.interval), 3600)
+            status.update(ok=False, error=f"{exc}; trying again in {round((source.interval + backoff) / 60)} min")
+            log.warning("%s: %s", source.name, exc)
         except Exception as exc:  # keep polling whatever goes wrong
             log.warning("%s fetch failed: %s", source.name, exc)
             status.update(ok=False, error=str(exc))
-            # Rate limited: back off progressively (up to 5 min) instead of retrying at full speed.
+            # Rate limited: back off progressively (up to an hour) instead of retrying at full speed.
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
-                backoff = min(max(backoff * 2, source.interval), 300)
+                backoff = min(max(backoff * 2, source.interval), 3600)
         await asyncio.sleep(source.interval + backoff)
 
 
@@ -413,6 +433,7 @@ async def load_port_names(state: AppState) -> None:
 
 # Ships move slowly and report every few minutes: send them every few broadcasts, not every one.
 SHIPS_EVERY = 5
+SPACE_EVERY = 15  # the browser moves stations along their track in between
 
 
 async def broadcast_loop(state: AppState) -> None:
@@ -455,6 +476,10 @@ async def broadcast_loop(state: AppState) -> None:
         if state.rail:
             message["rail"] = state.rail.snapshot()
             alert_messages += [{"type": "rail_alert", "incident": i} for i in state.rail.take_alerts()]
+        if state.space:
+            if tick % SPACE_EVERY == 1:
+                message["space"] = state.space.snapshot()
+            alert_messages += [{"type": "space_alert", "pass": p} for p in state.space.new_alerts()]
         if state.ships and tick % SHIPS_EVERY == 1:
             message["ships"] = state.ships.snapshot()
             alert_messages += [{"type": "ship_alert", "ship": s}
@@ -547,6 +572,9 @@ class Runtime:
             tasks.append(asyncio.create_task(save_ship_details(state)))
             tasks.append(asyncio.create_task(load_port_names(state)))
             log.info("Ships within %s km (%d known)", settings.ship_radius_km, len(state.ships.details))
+        if settings.space_enabled:
+            state.space = space.SpaceTracker(settings.home_lat, settings.home_lon, settings.space_alerts)
+            tasks.append(asyncio.create_task(space.run(state.space, state.client, settings.data_dir)))
         tasks.append(asyncio.create_task(poll_weather(state)))
         if settings.enrichment_enabled:
             tasks.append(asyncio.create_task(state.enricher.run()))
@@ -622,6 +650,7 @@ def config():
         "roads": {"enabled": tracker().roads is not None},
         "rail": {"enabled": tracker().rail is not None},
         "ships": {"enabled": tracker().ships is not None},
+        "space": {"enabled": tracker().space is not None},
         "units": {"distance": s.distance_unit, "altitude": s.altitude_unit, "speed": s.speed_unit},
         "aircraft_colours": s.aircraft_colours,
         "version": __version__,
@@ -937,6 +966,15 @@ def ship(mmsi: int):
     return found | {"trail": state.ships.trail(mmsi)}
 
 
+@app.get("/api/space")
+def space_now():
+    """Space stations (position, path, passes) and the visible passes coming up."""
+    state = tracker()
+    if state.space is None:
+        raise HTTPException(404, "Space is switched off (SPACE_ENABLED)")
+    return state.space.snapshot()
+
+
 @app.get("/api/buses")
 def buses():
     state = tracker()
@@ -1082,6 +1120,8 @@ async def websocket(ws: WebSocket):
             first["roads"] = state.roads.snapshot()
         if state.rail:
             first["rail"] = state.rail.snapshot()
+        if state.space:
+            first["space"] = state.space.snapshot()
         await ws.send_json(first)
         while True:
             await ws.receive_text()  # clients don't send anything; this detects disconnects

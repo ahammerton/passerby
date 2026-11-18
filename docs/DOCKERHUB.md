@@ -15,6 +15,7 @@ train is about to pass, and keeps a history of what it has seen.
 - **Overhead alerts**, and **interesting aircraft**: emergency squawks, notable types (Beluga, B-52, Spitfire…), types rarely seen near you, and military aircraft.
 - **UK trains** from Network Rail's open data: every train nearby, departure boards, and alerts for trains about to pass your house; **rail disruptions** at your stations from National Rail.
 - **Ships** from AIS via [aisstream.io](https://aisstream.io): names, types, flags, sizes and destinations, with alerts for interesting ships; also from your own AIS receiver (AIS-catcher).
+- **Space stations and satellites:** the ISS and Tiangong live on the map, passes over home you can see, bright satellites tonight, and an alert before a station is visible ([CelesTrak](https://celestrak.org) orbits, no key).
 - **Buses** (England) from the Bus Open Data Service, **road closures** from National Highways, **rain radar** from RainViewer.
 - **History** of every aircraft seen, a **settings page** with backup and restore, and an optional admin password.
 

@@ -6,6 +6,25 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
+### Fixed
+
+- **adsb.lol's daily limit.** adsb.lol now allows 500 requests a day for each internet connection,
+  and polling every 30 seconds used that up within hours. It's now checked every 200 seconds by
+  default, and anything under 180 is raised to 180. If the day's requests still run out, Passerby
+  waits until adsb.lol says they reset instead of retrying, and the top bar shows
+  "adsb.lol (paused until HH:MM)". OpenSky's daily credit limit is handled the same way.
+
+### Added
+
+- **Space stations and satellites.** The International Space Station and Tiangong move live on
+  the map with their next orbit. The side panel lists the passes you can see from home, with where
+  to look and whether each one fades into Earth's shadow, plus tonight's best bright-satellite
+  passes. An alert comes 5 minutes before a station is visible. Orbits come from CelesTrak, with no
+  key needed; it can be switched off under Settings → Space.
+- adsb.lol can be switched on or off, and its interval changed, under Settings → Aircraft.
+
 ## [0.3.0] - 2026-11-18
 
 ### Added

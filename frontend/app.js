@@ -426,6 +426,10 @@ function renderSources(sources) {
     if (s.standby) {
       return `<span title="Standing by while your receiver is working"><span class="dot"></span>${label} (standby)</span>`;
     }
+    if (s.resumes_at) {
+      // A used-up daily quota: paused until it resets, not broken.
+      return `<span title="${esc(s.error || "")}"><span class="dot warn"></span>${label} (paused until ${esc(clock(s.resumes_at))})</span>`;
+    }
     const cls = s.ok === true ? "ok" : s.ok === false ? "err" : "";
     const title = s.error ? esc(s.error) : `${s.count} aircraft, every ${s.interval}s`;
     return `<span title="${title}"><span class="dot ${cls}"></span>${label} (${s.count})</span>`;
@@ -556,6 +560,7 @@ function selectedItem() {
   if (kind === "road") return latestRoads.find((r) => r.id === id);
   if (kind === "ship") return latestShips.find((s) => s.mmsi === id);
   if (kind === "rail") return latestRail?.incidents.find((i) => i.id === id);
+  if (kind === "station") return latestSpace?.stations.find((s) => s.norad === id);
   return null;
 }
 
@@ -581,6 +586,10 @@ function select(kind, id) {
     map.setView(trainMarkers.get(id)?.getLatLng() || [item.lat, item.lon], Math.max(map.getZoom(), SELECT_ZOOM.train));
   } else if (kind === "rail") {
     // Incidents name areas, not places on the map: just the details.
+  } else if (kind === "station") {
+    if (!map.hasLayer(spaceLayer)) setGroup("space", true);
+    map.setView(spaceMarkers.get(id)?.getLatLng() || [item.lat, item.lon], Math.min(map.getZoom(), 4));
+    drawSpace();
   } else if (kind === "ship") {
     if (!map.hasLayer(shipLayer)) setGroup("ships", true);
     map.setView(shipPosition(item), Math.max(map.getZoom(), SELECT_ZOOM.ship));
@@ -600,15 +609,16 @@ function deselect() {
   if (selection.kind === "bus") hideRoute(selection.id);
   if (selection.kind === "ship") hideShipTrail();
   disruptionLayer.clearLayers();
-  const wasRoad = selection.kind === "road";
+  const wasRoad = selection.kind === "road", wasStation = selection.kind === "station";
   Object.assign(selection, { kind: null, id: null });
   renderDetails();
   if (wasRoad) drawRoads();
+  if (wasStation && map.hasLayer(spaceLayer)) drawSpace(); // un-highlight its path
 }
 
 const DETAILS_TITLE = { aircraft: "✈ Selected aircraft", train: "🚆 Selected train", bus: "🚌 Selected bus",
   disruption: "⚠ Bus disruption", road: "🚧 Road closure", ship: "🚢 Selected ship",
-  rail: "🚆 Rail disruption" };
+  rail: "🚆 Rail disruption", station: "🛰 Space station" };
 
 // Re-rendered on every update while something is selected.
 function renderDetails() {
@@ -626,7 +636,8 @@ function renderDetails() {
     : selection.kind === "disruption" ? disruptionHtml(item)
     : selection.kind === "road" ? roadHtml(item)
     : selection.kind === "rail" ? railHtml(item)
-    : selection.kind === "ship" ? shipPopup(item) : busPopup(item);
+    : selection.kind === "ship" ? shipPopup(item)
+    : selection.kind === "station" ? stationPopup(item) : busPopup(item);
   el.hidden = false;
   el.innerHTML = `<button type="button" class="group-head details-head" title="Close">${DETAILS_TITLE[selection.kind]}</button>
     <div class="details-body">${body}</div>`;
@@ -641,7 +652,7 @@ document.getElementById("details").addEventListener("click", (e) => {
 // Controls (tabs, buttons, links, the filter...) and the details card itself don't count.
 map.on("click", () => selection.kind && deselect());
 document.addEventListener("click", (e) => {
-  if (!selection.kind || e.target.closest(`#map, #details, #station-view, [data-icao], [data-train], [data-bus], [data-disruption], [data-road], [data-ship], [data-rail],
+  if (!selection.kind || e.target.closest(`#map, #details, #station-view, [data-icao], [data-train], [data-bus], [data-disruption], [data-road], [data-ship], [data-rail], [data-space],
       button, a, input, select, summary, label, #drawer-handle`)) return;
   deselect();
 });
@@ -655,7 +666,8 @@ function markSelected() {
   selectedEl?.classList.remove("selected");
   const m = selection.kind === "aircraft" ? markers.get(selection.id)
     : selection.kind === "train" ? trainMarkers.get(selection.id)
-    : selection.kind === "ship" ? shipMarkers.get(selection.id) : null;
+    : selection.kind === "ship" ? shipMarkers.get(selection.id)
+    : selection.kind === "station" ? spaceMarkers.get(selection.id) : null;
   selectedEl = m?.getElement() || null;
   selectedEl?.classList.add("selected");
   m?.setZIndexOffset(2000);
@@ -1748,6 +1760,212 @@ function onRailAlert(i) {
   }
 }
 
+// ---------- space: stations moving along their orbit, and passes over home ----------
+// The server sends each station's path (time, lat, lon) every 30 s; in between, the marker is
+// moved along it every second, so it glides rather than jumping 230 km at a time.
+
+const spaceLayer = L.layerGroup();
+const spaceMarkers = new Map(); // norad -> L.Marker
+let latestSpace = null;
+
+const STATION_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
+  '<rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/>' +
+  '<rect x="1" y="10" width="6" height="4" rx="0.5" fill="currentColor" opacity="0.85"/>' +
+  '<rect x="17" y="10" width="6" height="4" rx="0.5" fill="currentColor" opacity="0.85"/>' +
+  '<path d="M7 12h2M15 12h2" stroke="currentColor" stroke-width="1.5"/></svg>';
+
+// Where a station is now, from its path. Longitudes are unwrapped across the date line.
+function trackPosition(track, t) {
+  if (!track?.length) return null;
+  for (let i = 1; i < track.length; i++) {
+    const [t0, la0, lo0] = track[i - 1];
+    const [t1, la1, lo1] = track[i];
+    if (t >= t0 && t <= t1) {
+      const f = (t - t0) / (t1 - t0 || 1);
+      let d = lo1 - lo0;
+      if (d > 180) d -= 360;
+      if (d < -180) d += 360;
+      let lon = lo0 + d * f;
+      if (lon > 180) lon -= 360;
+      if (lon < -180) lon += 360;
+      return [la0 + (la1 - la0) * f, lon];
+    }
+  }
+  return null;
+}
+
+// A path as separate lines wherever it crosses the date line, so it isn't drawn across the map.
+function splitTrack(points) {
+  const lines = [[]];
+  for (let i = 0; i < points.length; i++) {
+    if (i && Math.abs(points[i][1] - points[i - 1][1]) > 180) lines.push([]);
+    lines[lines.length - 1].push(points[i]);
+  }
+  return lines.filter((l) => l.length > 1);
+}
+
+function drawSpace() {
+  spaceLayer.clearLayers();
+  spaceMarkers.clear();
+  if (!latestSpace) return;
+  const now = serverNow();
+  for (const s of latestSpace.stations) {
+    const past = s.track.filter((p) => p[0] <= now).map((p) => [p[1], p[2]]);
+    const ahead = s.track.filter((p) => p[0] >= now).map((p) => [p[1], p[2]]);
+    const selected = isSelected("station", s.norad);
+    for (const line of splitTrack(past)) {
+      L.polyline(line, { color: "#a855f7", weight: 2, opacity: 0.35, interactive: false }).addTo(spaceLayer);
+    }
+    for (const line of splitTrack(ahead)) {
+      L.polyline(line, { color: "#a855f7", weight: selected ? 3 : 2, opacity: selected ? 0.9 : 0.6,
+        dashArray: "6 6", interactive: false }).addTo(spaceLayer);
+    }
+    const at = trackPosition(s.track, now) || [s.lat, s.lon];
+    const marker = L.marker(at, {
+      icon: L.divIcon({ className: "station", iconSize: null,
+        html: `<div class="station-badge${s.el > 0 ? " up" : ""}">${STATION_ICON}<span>${esc(s.short)}</span></div>` }),
+      zIndexOffset: 1500,
+    }).bindTooltip(esc(`${s.name} · ${fmtAltKm(s.alt_km)} up${s.el > 0 ? ` · in your sky now, ${Math.round(s.el)}° ${compassName(s.az)}` : ""}`))
+      .on("click", () => select("station", s.norad))
+      .addTo(spaceLayer);
+    spaceMarkers.set(s.norad, marker);
+  }
+  markSelected();
+}
+
+function moveStations() {
+  if (!latestSpace || !map.hasLayer(spaceLayer)) return;
+  const now = serverNow();
+  for (const s of latestSpace.stations) {
+    const at = trackPosition(s.track, now);
+    if (at) spaceMarkers.get(s.norad)?.setLatLng(at);
+  }
+}
+setInterval(moveStations, 1000);
+map.on("overlayadd", (e) => { if (e.layer === spaceLayer) drawSpace(); });
+
+const COMPASS_WORDS = { N: "north", NNE: "north-north-east", NE: "north-east", ENE: "east-north-east", E: "east",
+  ESE: "east-south-east", SE: "south-east", SSE: "south-south-east", S: "south", SSW: "south-south-west",
+  SW: "south-west", WSW: "west-south-west", W: "west", WNW: "west-north-west", NW: "north-west", NNW: "north-north-west" };
+const COMPASS_16 = Object.keys(COMPASS_WORDS);
+const compassName = (az) => COMPASS_16[Math.round(az / 22.5) % 16];
+const fmtAltKm = (km) => (units.distance === "km" ? `${Math.round(km)} km` : fmtDist(km, 0));
+
+// "Tonight 18:21", "Tomorrow 05:10", "Fri 19:02".
+function passDay(t) {
+  const d = new Date(t * 1000);
+  const today = new Date(serverNow() * 1000);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const time = clock(t);
+  if (d.toDateString() === today.toDateString()) return `${d.getHours() >= 17 ? "Tonight" : "Today"} ${time}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `${d.getHours() < 12 ? "Tomorrow morning" : "Tomorrow"} ${time}`;
+  return `${d.toLocaleDateString([], { weekday: "short" })} ${time}`;
+}
+
+// Rocket stages and the like get a plainer name.
+function satName(p) {
+  if (p.station) return p.station;
+  const name = p.name.replace(/\s+/g, " ").trim();
+  if (/\bR\/B\b/.test(name)) return `${name.replace(/\s*R\/B.*$/, "")} rocket stage`;
+  return name;
+}
+
+function passSummary(p) {
+  const a = p.appears, v = p.vanishes;
+  const mins = Math.max(1, Math.round((v.time - a.time) / 60));
+  const end = v.into_shadow ? `fades out ${v.el}° ${v.dir} (into Earth's shadow)` : `sets ${v.dir}`;
+  const top = p.visible_peak || p.max;
+  return `appears ${a.dir} · highest ${top.el}° ${top.dir} · ${end} · ${mins} min`;
+}
+
+function renderSpace(snapshot) {
+  latestSpace = snapshot;
+  if (map.hasLayer(spaceLayer)) drawSpace();
+  const now = serverNow();
+  const st = snapshot.status || {};
+  document.getElementById("space-status").innerHTML =
+    `<span class="dot ${st.ok ? "ok" : st.ok === false ? "err" : ""}" title="${esc(st.ok === false ? st.error || "error"
+      : `Orbits from CelesTrak · ${snapshot.satellites} bright satellites`)}"></span>`;
+
+  document.getElementById("space-stations").innerHTML = snapshot.stations.length
+    ? snapshot.stations.map((s) => {
+        const next = s.passes.find((p) => p.visible && p.vanishes.time >= now);
+        const where = s.el > 0 ? `<b class="space-up">In your sky now: ${Math.round(s.el)}° ${compassName(s.az)}</b>`
+          : next ? `Next seen ${passDay(next.appears.time)}, ${next.appears.dir}` : "No visible passes in the next 3 days";
+        return `<li data-space="${s.norad}"${isSelected("station", s.norad) ? ' class="selected"' : ""}>
+          <div class="row"><span><b>${esc(s.short)}</b> <span class="meta">${esc(s.name)}</span></span>
+            <span class="meta">${fmtAltKm(s.alt_km)} up</span></div>
+          <div class="meta">${where}</div></li>`;
+      }).join("")
+    : `<li class="empty">${st.ok === false ? `Couldn't get orbits: ${esc(st.error || "error")}` : "Loading orbits…"}</li>`;
+
+  // Stations' visible passes, then the best few bright-satellite passes in the next 12 hours.
+  const passes = snapshot.visible_passes;
+  const stationPasses = passes.filter((p) => p.station);
+  const brightest = passes.filter((p) => !p.station && p.appears.time < now + 12 * 3600)
+    .sort((a, b) => b.visible_max_el - a.visible_max_el).slice(0, 5)
+    .sort((a, b) => a.appears.time - b.appears.time);
+  const li = (p) => `<li${p.station ? ` data-space="${p.norad}"` : ""} class="pass${p.station ? " station-pass" : ""}${p.appears.time <= now ? " now" : ""}">
+      <div class="row"><span>${p.station ? `<b>${esc(p.station)}</b>` : esc(satName(p))}</span>
+        <span class="meta">${p.appears.time <= now ? "<b>Now</b>" : esc(passDay(p.appears.time))}</span></div>
+      <div class="meta">${esc(passSummary(p))}</div></li>`;
+  document.getElementById("space-passes").innerHTML = stationPasses.length
+    ? stationPasses.slice(0, 6).map(li).join("")
+    : '<li class="empty">No space station passes you can see in the next 3 days</li>';
+  document.getElementById("satellite-passes").innerHTML = brightest.length
+    ? brightest.map(li).join("")
+    : '<li class="empty">None worth looking for in the next 12 hours</li>';
+  if (selection.kind === "station") renderDetails();
+}
+
+for (const id of ["space-stations", "space-passes"]) {
+  document.getElementById(id).addEventListener("click", (e) => {
+    const li = e.target.closest("[data-space]");
+    if (li) select("station", Number(li.dataset.space));
+  });
+}
+
+function stationPopup(s) {
+  const now = serverNow();
+  const rows = [
+    ["Height", fmtAltKm(s.alt_km)],
+    ["Speed", `${s.speed_kms.toFixed(1)} km/s (${Math.round(s.speed_kms * 3600).toLocaleString()} km/h)`],
+    ["Over", `${Math.abs(s.lat).toFixed(1)}°${s.lat >= 0 ? "N" : "S"}, ${Math.abs(s.lon).toFixed(1)}°${s.lon >= 0 ? "E" : "W"}`],
+    ["From home", s.el > 0 ? `In your sky: ${Math.round(s.el)}° up, ${COMPASS_WORDS[compassName(s.az)]}`
+      : `${fmtDist(s.range_km, 0)} away, below the horizon`],
+  ];
+  const passes = s.passes.filter((p) => p.set.time >= now).slice(0, 6);
+  const passRows = passes.map((p) => `<li class="${p.visible ? "visible-pass" : ""}">
+      <div class="row"><span>${esc(passDay(p.visible ? p.appears.time : p.rise.time))}</span>
+        <span class="meta">${p.visible ? "<b>Visible</b>" : "Not visible"}</span></div>
+      <div class="meta">${p.visible ? esc(passSummary(p))
+        : `highest ${p.max.el}° ${p.max.dir} · ${esc(notVisibleWhy(p))}`}</div></li>`).join("");
+  return `<div class="title"><b>🛰 ${esc(s.name)}</b></div>
+    <table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join("")}</table>
+    <h3 class="details-sub">Passes over home</h3>
+    <ul class="list compact">${passRows || '<li class="empty">None in the next 3 days</li>'}</ul>
+    <div class="meta"><a href="https://www.heavens-above.com/orbit.aspx?satid=${s.norad}" target="_blank" rel="noopener">Heavens-Above</a> ·
+      <a href="https://celestrak.org/satcat/table-satcat.php?CATNR=${s.norad}" target="_blank" rel="noopener">CelesTrak</a></div>
+    <div class="credit">Orbit from CelesTrak, measured ${esc(String(Math.round(s.elements_age_h)))} h ago · its next orbit is dashed on the map</div>`;
+}
+
+// A pass you can't see: in daylight, or in Earth's shadow the whole time (or too low).
+function notVisibleWhy(p) {
+  return { "too low": "too low", daylight: "in daylight", shadow: "in Earth's shadow" }[p.why_not] || "not visible";
+}
+
+function onSpaceAlert(p) {
+  if (!groupOn("space")) return; // switched off in the ☰ menu: no alerts either
+  const text = `${p.station} visible in ${Math.max(1, Math.round((p.appears.time - serverNow()) / 60))} min: ` +
+    `look ${COMPASS_WORDS[p.appears.dir] || p.appears.dir}, highest ${p.visible_peak.el}° ` +
+    `${COMPASS_WORDS[p.visible_peak.dir] || p.visible_peak.dir} at ${clock(p.visible_peak.time)}`;
+  toast(`🛰 ${text}`, "interesting");
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(`${p.station} passing over`, { body: text });
+  }
+}
+
 // ---------- rain radar (RainViewer): the last two hours, playable ----------
 // One tile layer per frame, all loaded, only the shown one visible, so playing doesn't flicker.
 
@@ -2120,6 +2338,7 @@ function connect() {
       if (msg.roads) renderRoads(msg.roads);
       if (msg.rail) renderRail(msg.rail);
       if (msg.ships) renderShips(msg.ships);
+      if (msg.space) renderSpace(msg.space);
       if (msg.trains) {
         renderTrains(msg.trains);
         if (!connect.tabsRestored) {
@@ -2135,6 +2354,8 @@ function connect() {
       onRailAlert(msg.incident);
     } else if (msg.type === "ship_alert") {
       onShipAlert(msg.ship);
+    } else if (msg.type === "space_alert") {
+      onSpaceAlert(msg.pass);
     } else if (msg.type === "train_alert") {
       onTrainAlert(msg.train);
     }
@@ -2166,7 +2387,8 @@ async function loadRailways() {
 // ---------- ☰ what to show: each group is map layers plus its tabs and side-panel lists ----------
 
 const shownGroups = []; // [{ key, label, layers }]
-const KIND_GROUP = { aircraft: "aircraft", train: "trains", rail: "trains", bus: "buses", disruption: "buses", road: "roads", ship: "ships" };
+const KIND_GROUP = { aircraft: "aircraft", train: "trains", rail: "trains", bus: "buses", disruption: "buses", road: "roads", ship: "ships",
+  station: "space" };
 const groupOn = (key) => !document.body.classList.contains(`off-${key}`);
 const tabShown = (b) => !b.hidden && !(b.dataset.layer && !groupOn(b.dataset.layer));
 
@@ -2211,12 +2433,13 @@ function setGroup(key, on, save = true) {
   }
 }
 
-function addLayerMenu(withTrains, withBuses, withRoads, withShips) {
+function addLayerMenu(withTrains, withBuses, withRoads, withShips, withSpace) {
   shownGroups.push({ key: "aircraft", label: "✈ Aircraft", layers: [aircraftLayer, airportLayer] });
   if (withTrains) shownGroups.push({ key: "trains", label: "🚆 Trains", layers: [trainLayer, railLayer] });
   if (withBuses) shownGroups.push({ key: "buses", label: BUS_LAYER_NAME, layers: [busLayer] });
   if (withRoads) shownGroups.push({ key: "roads", label: "🚧 Roads", layers: [roadLayer] });
   if (withShips) shownGroups.push({ key: "ships", label: "🚢 Ships", layers: [shipLayer] });
+  if (withSpace) shownGroups.push({ key: "space", label: "🛰 Space", layers: [spaceLayer] });
   shownGroups.push({ key: "radar", label: RADAR_LAYER_NAME, layers: [radarLayer] });
 
   const list = document.getElementById("layers-list");
@@ -2275,7 +2498,8 @@ async function init() {
     // The live feed sends ships every few seconds; don't wait for it.
     getJSON("/api/ships").then(renderShips).catch(console.warn);
   }
-  addLayerMenu(cfg.trains, cfg.buses?.enabled, cfg.roads?.enabled, cfg.ships?.enabled);
+  if (cfg.space?.enabled) document.getElementById("space-group").hidden = false;
+  addLayerMenu(cfg.trains, cfg.buses?.enabled, cfg.roads?.enabled, cfg.ships?.enabled, cfg.space?.enabled);
   renderBuses();
   if (cfg.trains && cfg.passing_window?.enabled) {
     passing = { minutes: cfg.passing_window.minutes };

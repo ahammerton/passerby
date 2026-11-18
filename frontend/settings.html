@@ -33,6 +33,7 @@
         <button type="button" role="tab" data-page="buses">🚌 Buses</button>
         <button type="button" role="tab" data-page="roads">🚧 Roads</button>
         <button type="button" role="tab" data-page="ships">🚢 Ships</button>
+        <button type="button" role="tab" data-page="space">🛰 Space</button>
       </nav>
 
       <div class="settings-page" data-page="general" hidden>
@@ -137,6 +138,18 @@
         <button type="button" id="receiver-find" class="secondary">Find receiver</button>
         <span id="receiver-result" class="hint"></span>
         <p class="hint">Either way, your receiver's data is used for every aircraft it can see.</p>
+      </section>
+
+      <section>
+        <h2>adsb.lol</h2>
+        <p class="hint">A free community network that fills in aircraft your receiver can't see. It allows
+          500 requests a day from each internet connection, so it can be checked every 3 minutes at most
+          (aircraft keep moving smoothly in between). If the day's requests run out, Passerby waits until
+          they reset.</p>
+        <label class="check"><input type="checkbox" name="adsblol_enabled"> Use adsb.lol</label>
+        <div class="fields">
+          <label>Check every (seconds) <input name="adsblol_interval" type="number" min="180" max="3600" step="10"></label>
+        </div>
       </section>
 
       <section>
@@ -347,6 +360,25 @@
 
         <p class="hint">Saved keys and passwords are never shown again: leave the box empty to keep the
           current one, or type a new one to replace it. New ones are checked before they're saved.</p>
+      </section>
+      </div>
+
+      <div class="settings-page" data-page="space" hidden>
+      <section>
+        <h2>Space stations and satellites</h2>
+        <p class="hint">The International Space Station, China's Tiangong station and the brightest satellites,
+          worked out from free orbit data (CelesTrak). No key needed.</p>
+        <label class="check"><input type="checkbox" name="space_enabled"> Show space stations and passes</label>
+        <div class="fields">
+          <label>Alerts
+            <select name="space_alerts">
+              <option value="stations">5 minutes before a space station is visible</option>
+              <option value="off">None</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">A pass is visible when the station is lit by the Sun and your sky is dark: usually for a
+          few weeks at a time, in the evening or before dawn.</p>
       </section>
       </div>
 
