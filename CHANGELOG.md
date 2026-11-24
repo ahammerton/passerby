@@ -6,6 +6,16 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- The Docker image no longer contains pip, whose bundled libraries were reported as vulnerabilities.
+- The Docker images are rebuilt every week to pick up Debian and Python security fixes, include a
+  list of their packages (SBOM), and are scanned for vulnerabilities that have a fix.
+
+### Changed
+
+- The `latest` Docker tag only follows the main branch. Publishing a release no longer moves it too.
+
 ## [0.4.0] - 2026-11-18
 
 ### Fixed

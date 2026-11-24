@@ -6,6 +6,7 @@
 #   push to main      -> :latest and :sha-<short sha>
 #   tag v1.2.3        -> :1.2.3, :1.2 and :1
 #   pull request      -> build only, nothing published
+# rebuild.yml starts it every week too, so the images get their base image's security fixes.
 name: docker
 on:
   push:
@@ -78,6 +79,8 @@ jobs:
           images: |
             ghcr.io/${{ github.repository_owner }}/passerby
             name=docker.io/cyrune/passerby,enable=${{ env.DOCKERHUB_USERNAME != '' }}
+          # :latest is main only. Otherwise a release's build would move it as well.
+          flavor: latest=false
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
@@ -97,6 +100,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Lists the image's packages, so scanners needn't guess them.
+          sbom: true
+          # The weekly rebuild reinstalls everything, for fixes in unpinned packages.
+          no-cache: ${{ github.event_name == 'workflow_dispatch' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -110,3 +117,32 @@ jobs:
           repository: cyrune/passerby
           short-description: Live planes, trains and buses passing your home
           readme-filepath: ./docs/DOCKERHUB.md
+
+  # Fails on high severity vulnerabilities that have a fix. A separate job, so the scanner never sees
+  # the publishing logins, and so a new vulnerability doesn't hold back an image that fixes others.
+  scan:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build for scanning
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: backend/Dockerfile
+          load: true
+          tags: passerby:scan
+          no-cache: ${{ github.event_name == 'workflow_dispatch' }}
+          cache-from: type=gha
+
+      - name: Scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: passerby:scan
+          severity-cutoff: high
+          only-fixed: true
+          output-format: table

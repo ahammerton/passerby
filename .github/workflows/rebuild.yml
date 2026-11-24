@@ -1,0 +1,36 @@
+# Rebuilds the images every week, as Debian and Python fixes arrive in the base image without its
+# tag changing, so Dependabot can't see them. Starts docker.yml for main (:latest) and for the newest
+# release (:1.2.3, :1.2 and :1), which runs the tests again before publishing.
+name: rebuild
+on:
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays, 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  actions: write   # to start docker.yml
+  contents: read
+
+jobs:
+  start:
+    # GitHub only, as in docker.yml.
+    if: github.repository_owner == 'ahammerton'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Rebuild main
+        run: gh workflow run docker.yml --ref main
+
+      - name: Rebuild the newest release
+        run: |
+          tag=$(gh api "repos/$GH_REPO/git/matching-refs/tags/v" --paginate --jq '.[].ref | ltrimstr("refs/tags/")' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          # A release is built with its own docker.yml and Dockerfile. Those up to 0.4.0 also move
+          # :latest, so only rebuild releases made since this file was added.
+          if [ -n "$tag" ] && gh api "repos/$GH_REPO/contents/.github/workflows/rebuild.yml?ref=$tag" --silent; then
+            gh workflow run docker.yml --ref "$tag"
+          else
+            echo "Newest release (${tag:-none}) is from before weekly rebuilds: skipped"
+          fi
