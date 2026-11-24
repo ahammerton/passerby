@@ -7,7 +7,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app/backend
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip isn't needed once the packages are in, and the libraries bundled inside it (urllib3, msgpack,
+# setuptools) get reported as vulnerabilities in this image. ensurepip holds a second copy.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip uninstall --yes pip \
+    && rm -rf /usr/local/lib/python3.*/ensurepip
 
 COPY backend/app ./app
 COPY frontend /app/frontend
