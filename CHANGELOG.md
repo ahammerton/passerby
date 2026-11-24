@@ -6,6 +6,15 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-24
+
+### Fixed
+
+- Passerby reports the right version. 0.4.1 called itself 0.4.0 in the startup log, at `/api/config`
+  and to the services it fetches from.
+
+## [0.4.1] - 2026-11-24
+
 ### Security
 
 - The Docker image no longer contains pip, whose bundled libraries were reported as vulnerabilities.
